@@ -1726,7 +1726,7 @@ export default function App() {
                   </div>
 
                   <div
-                    className={`p-4 min-h-[280px] max-h-[calc(100vh-20rem)] overflow-y-auto flex flex-col justify-end gap-3 ${
+                    className={`flex-1 min-h-[280px] max-h-[calc(100vh-20rem)] overflow-y-auto p-4 flex flex-col gap-3 ${
                       isDarkMode ? "bg-slate-950/40" : "bg-slate-50"
                     }`}
                   >
@@ -1737,8 +1737,15 @@ export default function App() {
                       return (
                         <div
                           key={message.id}
-                          className={`flex ${isSent ? "justify-end" : "justify-start"}`}
+                          className={`flex items-end gap-2 ${isSent ? "justify-end" : "justify-start"}`}
                         >
+                          {!isSent && (
+                            <img
+                              src={message.avatar || selectedChatUser.avatar || "https://via.placeholder.com/40"}
+                              alt="Avatar"
+                              className="h-8 w-8 rounded-full object-cover"
+                            />
+                          )}
                           <div
                             className={`relative max-w-[80%] ${isSent ? "text-right" : "text-left"}`}
                             onMouseEnter={() => setReactionPickerMessageId(message.id)}
@@ -1771,7 +1778,7 @@ export default function App() {
                               </div>
                             )}
                             <div
-                              className={`inline-block rounded-xl px-3 py-2 text-xs ${isSent ? "bg-orange-500 text-white rounded-br-none" : "bg-slate-800 text-slate-100 rounded-bl-none"}`}
+                              className={`inline-block rounded-xl px-3 py-2 text-xs ${isSent ? "bg-[#FF5500] text-white rounded-br-none" : "bg-white text-slate-800 border border-slate-200 rounded-bl-none shadow-sm"}`}
                             >
                               {message.content}
                             </div>
