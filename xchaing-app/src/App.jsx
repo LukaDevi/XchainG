@@ -88,9 +88,18 @@ export default function App() {
   const [matchesFilter, setMatchesFilter] = useState("incoming");
   const [selectedChatUser, setSelectedChatUser] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
+  const messagesEndRef = useRef(null);
   const [reactionPickerMessageId, setReactionPickerMessageId] = useState(null);
   const [messageDraft, setMessageDraft] = useState("");
   const reactionOptions = ["❤️", "👍", "😂", "😮", "🔥"];
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [chatMessages]);
   const [chatConversations] = useState([
     {
       id: 1,
@@ -1717,7 +1726,7 @@ export default function App() {
                   </div>
 
                   <div
-                    className={`p-4 min-h-[280px] flex flex-col justify-end gap-3 ${
+                    className={`p-4 min-h-[280px] max-h-[calc(100vh-20rem)] overflow-y-auto flex flex-col justify-end gap-3 ${
                       isDarkMode ? "bg-slate-950/40" : "bg-slate-50"
                     }`}
                   >
@@ -1794,6 +1803,7 @@ export default function App() {
                     <div className="text-[10px] text-slate-500 text-center">
                       ჩატი გახსნილია {selectedChatUser.name}-თან
                     </div>
+                    <div ref={messagesEndRef} />
                   </div>
 
                   <form
