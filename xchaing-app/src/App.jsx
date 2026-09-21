@@ -88,7 +88,9 @@ export default function App() {
   const [matchesFilter, setMatchesFilter] = useState("incoming");
   const [selectedChatUser, setSelectedChatUser] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
+  const [reactionPickerMessageId, setReactionPickerMessageId] = useState(null);
   const [messageDraft, setMessageDraft] = useState("");
+  const reactionOptions = ["❤️", "👍", "😂", "😮", "🔥"];
   const [chatConversations] = useState([
     {
       id: 1,
@@ -613,6 +615,20 @@ export default function App() {
       setMessageDraft("");
     }
   };
+
+  const handleMessageReaction = (messageId, reaction) => {
+    setChatMessages((currentMessages) =>
+      currentMessages.map((message) =>
+        message.id === messageId ? { ...message, reaction } : message,
+      ),
+    );
+    setReactionPickerMessageId(null);
+  };
+
+  const isOwnMessage = (message) =>
+    message.isMe === true ||
+    message.sender_id === currentUser?.id ||
+    message.user_id === currentUser?.id;
 
   const handleMarkListingTraded = (id) => {
     setProfileListings((listings) =>
@@ -1705,13 +1721,60 @@ export default function App() {
                       isDarkMode ? "bg-slate-950/40" : "bg-slate-50"
                     }`}
                   >
-                    {chatMessages.map((message) => (
-                      <div key={message.id} className={`flex ${message.sender_id === currentUser?.id ? "justify-end" : "justify-start"}`}>
-                        <div className={`max-w-[80%] rounded-xl px-3 py-2 text-xs ${message.sender_id === currentUser?.id ? "bg-[#FF5500] text-white rounded-br-sm" : isDarkMode ? "bg-slate-800 text-slate-200" : "bg-white border border-slate-200 text-slate-700"}`}>
-                          {message.content}
+                    {chatMessages.map((message) => {
+                      const isSent = isOwnMessage(message);
+                      const isPickerOpen = reactionPickerMessageId === message.id;
+
+                      return (
+                        <div
+                          key={message.id}
+                          className={`flex ${isSent ? "justify-end" : "justify-start"}`}
+                        >
+                          <div
+                            className={`relative max-w-[80%] ${isSent ? "text-right" : "text-left"}`}
+                            onMouseEnter={() => setReactionPickerMessageId(message.id)}
+                            onMouseLeave={() => setReactionPickerMessageId(null)}
+                            onClick={(event) => {
+                              if (!event.target.closest("button")) {
+                                setReactionPickerMessageId((currentId) =>
+                                  currentId === message.id ? null : message.id,
+                                );
+                              }
+                            }}
+                          >
+                            {isPickerOpen && (
+                              <div
+                                className={`absolute bottom-full z-10 mb-1 flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900 p-1 shadow-lg ${isSent ? "right-0" : "left-0"}`}
+                                role="group"
+                                aria-label="Choose a reaction"
+                              >
+                                {reactionOptions.map((reaction) => (
+                                  <button
+                                    key={reaction}
+                                    type="button"
+                                    onClick={() => handleMessageReaction(message.id, reaction)}
+                                    className="flex h-8 w-8 items-center justify-center rounded-md text-base transition hover:bg-slate-800"
+                                    aria-label={`React ${reaction}`}
+                                  >
+                                    {reaction}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            <div
+                              className={`inline-block rounded-xl px-3 py-2 text-xs ${isSent ? "bg-orange-500 text-white rounded-br-none" : "bg-slate-800 text-slate-100 rounded-bl-none"}`}
+                            >
+                              {message.content}
+                            </div>
+                            {message.reaction && (
+                              <span className="absolute -bottom-2 right-1 flex h-5 min-w-5 items-center justify-center rounded-full border border-slate-900 bg-slate-700 px-1 text-xs shadow-sm">
+                                {message.reaction}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     <div className="flex items-end gap-2">
                       <img
                         src={selectedChatUser.itemImage}
