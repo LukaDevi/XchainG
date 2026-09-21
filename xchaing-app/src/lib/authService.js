@@ -1,8 +1,15 @@
-import { supabase } from '../supabaseClient';
+import { supabase, supabaseConfigurationError } from './supabase';
+
+function requireSupabase() {
+  if (!supabase) {
+    throw new Error(supabaseConfigurationError || 'Supabase არ არის კონფიგურირებული.');
+  }
+  return supabase;
+}
 
 // 1. ???????????? ??????????? Email/Password-??
 export async function signUpUser(email, password, fullName) {
-  const { data, error } = await supabase.auth.signUp({
+  const { data, error } = await requireSupabase().auth.signUp({
     email,
     password,
     options: {
@@ -15,7 +22,7 @@ export async function signUpUser(email, password, fullName) {
 
 // 2. ???????????? ??????
 export async function signInUser(email, password) {
-  const { data, error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await requireSupabase().auth.signInWithPassword({
     email,
     password
   });
@@ -25,19 +32,19 @@ export async function signInUser(email, password) {
 
 // 3. ?????????? ????????
 export async function signOutUser() {
-  const { error } = await supabase.auth.signOut();
+  const { error } = await requireSupabase().auth.signOut();
   if (error) throw error;
 }
 
 // 4. ????????? ???????????? ???????????? ??????
 export async function getCurrentUser() {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await requireSupabase().auth.getUser();
   return user;
 }
 
 // 5. ??????? ????????/????????????? ????????
 export async function getItems() {
-  const { data, error } = await supabase
+  const { data, error } = await requireSupabase()
     .from('items')
     .select('*')
     .order('created_at', { ascending: false });
@@ -47,7 +54,7 @@ export async function getItems() {
 
 // 6. ?????? ????? ?????? ????????
 export async function createItem(itemData) {
-  const { data, error } = await supabase
+  const { data, error } = await requireSupabase()
     .from('items')
     .insert([itemData])
     .select();
@@ -57,7 +64,7 @@ export async function createItem(itemData) {
 
 // 7. მომხმარებლის პროფილის მონაცემების მიღება
 export async function getUserProfile(userId) {
-  const { data, error } = await supabase
+  const { data, error } = await requireSupabase()
     .from('profiles')
     .select('*')
     .eq('id', userId)
@@ -68,7 +75,7 @@ export async function getUserProfile(userId) {
 
 // 8. პროფილის განახლება
 export async function updateUserProfile(userId, updates) {
-  const { data, error } = await supabase
+  const { data, error } = await requireSupabase()
     .from('profiles')
     .update(updates)
     .eq('id', userId)

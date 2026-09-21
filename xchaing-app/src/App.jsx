@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { supabase } from "./lib/supabase";
+import { supabase, supabaseConfigurationError } from "./lib/supabase";
 import {
   Menu,
   Sparkles,
@@ -54,10 +54,8 @@ export default function App() {
 
   // Auth State
   const [currentUser, setCurrentUser] = useState(null);
-  const [profileAvatar, setProfileAvatar] = useState(
-    "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=300&auto=format&fit=crop",
-  );
-  const [profileUsername, setProfileUsername] = useState("luka_gogotishvili");
+  const [profileAvatar, setProfileAvatar] = useState("");
+  const [profileUsername, setProfileUsername] = useState("");
   const [profileSaveStatus, setProfileSaveStatus] = useState("");
   const [avatarUploadStatus, setAvatarUploadStatus] = useState("");
   const avatarInputRef = useRef(null);
@@ -100,98 +98,14 @@ export default function App() {
   useEffect(() => {
     scrollToBottom();
   }, [chatMessages]);
-  const [chatConversations] = useState([
-    {
-      id: 1,
-      name: "გიორგი მ.",
-      avatar:
-        "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&auto=format&fit=crop",
-      itemTitle: "iPhone 13 Pro 128GB",
-      itemImage:
-        "https://images.unsplash.com/photo-1632661674596-df8be070a5c5?q=80&w=200&auto=format&fit=crop",
-      previewType: "message",
-      lastMessageText: "Geixare",
-      timeAgo: "4სთ",
-      unreadCount: 2,
-    },
-    {
-      id: 2,
-      name: "მარიამი ბ.",
-      avatar:
-        "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200&auto=format&fit=crop",
-      itemTitle: "Nintendo Switch OLED",
-      itemImage:
-        "https://images.unsplash.com/photo-1578303512597-81e6cc155b3e?q=80&w=200&auto=format&fit=crop",
-      previewType: "typing",
-      timeAgo: "ახლა",
-      unreadCount: 0,
-    },
-    {
-      id: 3,
-      name: "ლუკა გ.",
-      avatar:
-        "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=200&auto=format&fit=crop",
-      itemTitle: "Sony WH-1000XM5",
-      itemImage:
-        "https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?q=80&w=200&auto=format&fit=crop",
-      previewType: "reaction",
-      timeAgo: "4სთ",
-      unreadCount: 0,
-    },
-    {
-      id: 4,
-      name: "ნიკა კ.",
-      avatar:
-        "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format&fit=crop",
-      itemTitle: "Canon EOS R M50 Mark II",
-      itemImage:
-        "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=200&auto=format&fit=crop",
-      previewType: "missed",
-      timeAgo: "2სთ",
-      unreadCount: 0,
-    },
-  ]);
+  const [chatConversations, setChatConversations] = useState([]);
   const [profileTab, setProfileTab] = useState("listings");
-  const [profileForm, setProfileForm] = useState({
-    name: "ლუკა გოგოტიშვილი",
-    phone: "+995 555 12 34 56",
-    location: "თბილისი, საქართველო",
-    bio: "ვცვლი ტექნიკას და ვინტაჟურ ნივთებს სამართლიან ბარტერზე.",
-  });
-  const [profileListings, setProfileListings] = useState([
-    {
-      id: 1,
-      title: "iPhone 13 Pro 128GB",
-      value: "1800 ₾",
-      category: "ტექნიკა",
-      image:
-        "https://images.unsplash.com/photo-1632661674596-df8be070a5c5?q=80&w=500&auto=format&fit=crop",
-    },
-    {
-      id: 2,
-      title: "MacBook Air M1",
-      value: "1900 ₾",
-      category: "ტექნიკა",
-      image:
-        "https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?q=80&w=500&auto=format&fit=crop",
-    },
-    {
-      id: 3,
-      title: "Nike Air Max 90",
-      value: "320 ₾",
-      category: "ტანსაცმელი",
-      image:
-        "https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=500&auto=format&fit=crop",
-    },
-  ]);
-  const profileHistory = [
-    { title: "Sony PlayStation 5", person: "გიორგი მ.", rating: "5.0", date: "12 სექტემბერი" },
-    { title: "Canon EOS R M50 Mark II", person: "ნიკა კ.", rating: "4.9", date: "28 აგვისტო" },
-  ];
-  const savedListings = [
-    { title: "Nintendo Switch OLED", person: "მარიამი ბ.", value: "950 ₾", image: "https://images.unsplash.com/photo-1578303512597-81e6cc155b3e?q=80&w=400&auto=format&fit=crop" },
-    { title: "Sony WH-1000XM5", person: "ლუკა გ.", value: "780 ₾", image: "https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?q=80&w=400&auto=format&fit=crop" },
-  ];
+  const [profileForm, setProfileForm] = useState({ name: "", phone: "", location: "", bio: "" });
+  const [profileListings, setProfileListings] = useState([]);
+  const [profileHistory] = useState([]);
+  const [savedListings] = useState([]);
+  const [matches, setMatches] = useState([]);
+  const [sentMatches, setSentMatches] = useState([]);
 
   useEffect(() => {
     if (!supabase) return undefined;
@@ -203,6 +117,11 @@ export default function App() {
           email: user.email,
           name: user.user_metadata?.full_name || user.email?.split("@")[0],
         });
+        supabase.from("profiles").upsert({
+          id: user.id,
+          full_name: user.user_metadata?.full_name || user.email?.split("@")[0],
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "id" });
       } else {
         setCurrentUser(null);
         setIsModalOpen(false);
@@ -222,52 +141,83 @@ export default function App() {
     if (!supabase || !currentUser?.id) return undefined;
 
     let channel;
-    const loadProfile = async () => {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("full_name, username, bio, location, avatar_url")
-        .eq("id", currentUser.id)
-        .maybeSingle();
+    const loadDatabaseState = async () => {
+      const [{ data: profile }, { data: allItems }, { data: messages }] = await Promise.all([
+        supabase.from("profiles").select("full_name, username, bio, location, phone, avatar_url").eq("id", currentUser.id).maybeSingle(),
+        supabase.from("items").select("*").order("created_at", { ascending: false }),
+        supabase.from("messages").select("*").or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`).order("created_at", { ascending: false }),
+      ]);
 
       if (profile) {
-        setProfileForm((currentForm) => ({
-          ...currentForm,
-          name: profile.full_name || currentForm.name,
-          bio: profile.bio || currentForm.bio,
-          location: profile.location || currentForm.location,
-        }));
-        setProfileUsername(profile.username || "luka_gogotishvili");
-        if (profile.avatar_url) setProfileAvatar(profile.avatar_url);
+        setProfileForm({ name: profile.full_name || currentUser.name || "", phone: profile.phone || "", location: profile.location || "", bio: profile.bio || "" });
+        setProfileUsername(profile.username || "");
+        setProfileAvatar(profile.avatar_url || "");
       }
+
+      const normalizedItems = allItems || [];
+      setProfileListings(normalizedItems.filter((item) => (item.user_id || item.owner_id) === currentUser.id).map((item) => ({
+        ...item,
+        title: item.title || item.name,
+        value: item.value || item.price || "",
+        category: item.category || "",
+        image: item.image_url || item.image || "",
+      })));
+
+      const otherUserIds = [...new Set((messages || []).map((message) => message.sender_id === currentUser.id ? message.receiver_id : message.sender_id).filter(Boolean))];
+      if (otherUserIds.length) {
+        const { data: profiles } = await supabase.from("profiles").select("id, full_name, avatar_url").in("id", otherUserIds);
+        const profileById = Object.fromEntries((profiles || []).map((item) => [item.id, item]));
+        const latestByUser = new Map();
+        (messages || []).forEach((message) => {
+          const otherId = message.sender_id === currentUser.id ? message.receiver_id : message.sender_id;
+          if (!latestByUser.has(otherId)) latestByUser.set(otherId, message);
+        });
+        setChatConversations([...latestByUser.entries()].map(([userId, message]) => ({
+          id: userId,
+          userId,
+          name: profileById[userId]?.full_name || "მომხმარებელი",
+          avatar: profileById[userId]?.avatar_url || "",
+          itemTitle: "",
+          itemImage: "",
+          lastMessageText: message.content,
+          timeAgo: new Date(message.created_at).toLocaleDateString("ka-GE"),
+          unreadCount: 0,
+        })));
+      } else {
+        setChatConversations([]);
+      }
+
+      const ownItems = normalizedItems.filter((item) => (item.user_id || item.owner_id) === currentUser.id);
+      const otherItems = normalizedItems.filter((item) => (item.user_id || item.owner_id) && (item.user_id || item.owner_id) !== currentUser.id);
+      const suggestions = ownItems.flatMap((ownItem) => otherItems.filter((otherItem) => {
+        const wanted = String(otherItem.desired_trade || otherItem.desiredTrade || "").toLowerCase();
+        return wanted && wanted.includes(String(ownItem.title || ownItem.name || "").toLowerCase());
+      }).map((otherItem) => ({
+        id: `${ownItem.id}-${otherItem.id}`,
+        type: "incoming",
+        myProduct: { title: ownItem.title || ownItem.name, image: ownItem.image_url || ownItem.image || "", estValue: ownItem.value || ownItem.price || "" },
+        offeredProduct: { userId: otherItem.user_id || otherItem.owner_id, title: otherItem.title || otherItem.name, user: "მომხმარებელი", rating: 0, image: otherItem.image_url || otherItem.image || "", estValue: otherItem.value || otherItem.price || "" },
+        matchScore: 80,
+        status: "pending",
+        aiComment: "ეს შეთავაზება დაფუძნებულია რეალურ ნივთებსა და გაცვლის სურვილზე.",
+      })));
+      setMatches(suggestions);
+      setSentMatches([]);
     };
 
-    loadProfile();
-    if (supabase && selectedChatUser?.userId) {
-      const channelName = `messages:${selectedChatUser.userId}`;
-      channel = supabase
-        .channel(channelName)
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "messages" },
-          (payload) => {
-            const message = payload.new;
-            if (
-              message.sender_id === selectedChatUser.userId ||
-              message.receiver_id === selectedChatUser.userId
-            ) {
-              setChatMessages((currentMessages) => [
-                ...currentMessages,
-                message,
-              ]);
-            }
-          },
-        )
-        .subscribe();
+    loadDatabaseState();
+    if (selectedChatUser?.userId) {
+      channel = supabase.channel(`messages:${currentUser.id}:${selectedChatUser.userId}`).on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
+        const message = payload.new;
+        if ((message.sender_id === selectedChatUser.userId && message.receiver_id === currentUser.id) || (message.sender_id === currentUser.id && message.receiver_id === selectedChatUser.userId)) setChatMessages((currentMessages) => [...currentMessages, message]);
+      }).subscribe();
     }
+    return () => { if (channel) supabase.removeChannel(channel); };
+  }, [currentUser?.id, currentUser?.name, selectedChatUser?.userId]);
 
-    return () => {
-      if (channel) supabase.removeChannel(channel);
-    };
+  useEffect(() => {
+    if (!supabase || !currentUser?.id || !selectedChatUser?.userId) return;
+    supabase.from("messages").select("*").or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${selectedChatUser.userId}),and(sender_id.eq.${selectedChatUser.userId},receiver_id.eq.${currentUser.id})`).order("created_at", { ascending: true }).then(({ data }) => setChatMessages(data || []));
   }, [currentUser?.id, selectedChatUser?.userId]);
 
   useEffect(() => {
@@ -311,109 +261,6 @@ export default function App() {
       setIsCameraReady(false);
     };
   }, [isModalOpen]);
-  const [matches, setMatches] = useState([
-    {
-      id: 1,
-      type: "incoming",
-      myProduct: {
-        title: "iPhone 13 Pro 128GB",
-        image:
-          "https://images.unsplash.com/photo-1632661674596-df8be070a5c5?q=80&w=400&auto=format&fit=crop",
-        estValue: "1800 ₾",
-      },
-      offeredProduct: {
-        title: "Sony PlayStation 5 + 2 Controller",
-        user: "გიორგი მ.",
-        rating: 4.9,
-        image:
-          "https://images.unsplash.com/photo-1606813907291-d86efa9b94db?q=80&w=400&auto=format&fit=crop",
-        estValue: "1750 ₾",
-      },
-      matchScore: 96,
-      status: "pending",
-      aiComment:
-        "ძალიან თანაბარი გაცვლაა! ორივე ნივთის საბაზრო ღირებულება თითქმის იდენტურია.",
-    },
-    {
-      id: 2,
-      type: "incoming",
-      myProduct: {
-        title: "MacBook Air M1",
-        image:
-          "https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?q=80&w=400&auto=format&fit=crop",
-        estValue: "1900 ₾",
-      },
-      offeredProduct: {
-        title: "Canon EOS R M50 Mark II",
-        user: "ნიკა კ.",
-        rating: 4.7,
-        image:
-          "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=400&auto=format&fit=crop",
-        estValue: "1400 ₾",
-      },
-      matchScore: 78,
-      status: "pending",
-      aiComment:
-        "ფასობრივი სხვაობა ~500 ₾. რეკომენდებულია კამერის მხრიდან თანხის დამატება.",
-    },
-  ]);
-  const [sentMatches, setSentMatches] = useState([
-    {
-      id: 101,
-      targetProduct: {
-        title: "Nintendo Switch OLED",
-        image:
-          "https://images.unsplash.com/photo-1578303512597-81e6cc155b3e?q=80&w=400&auto=format&fit=crop",
-        estValue: "950 ₾",
-      },
-      recipient: "მარიამი ბ.",
-      offeredProduct: {
-        title: "iPhone 13 Pro 128GB",
-        image:
-          "https://images.unsplash.com/photo-1632661674596-df8be070a5c5?q=80&w=400&auto=format&fit=crop",
-        estValue: "1800 ₾",
-      },
-      status: "pending",
-      timestamp: "დღეს, 14:32",
-    },
-    {
-      id: 102,
-      targetProduct: {
-        title: "Sony WH-1000XM5",
-        image:
-          "https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?q=80&w=400&auto=format&fit=crop",
-        estValue: "780 ₾",
-      },
-      recipient: "ლუკა გ.",
-      offeredProduct: {
-        title: "MacBook Air M1",
-        image:
-          "https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?q=80&w=400&auto=format&fit=crop",
-        estValue: "1900 ₾",
-      },
-      status: "accepted",
-      timestamp: "გუშინ, 18:10",
-    },
-    {
-      id: 103,
-      targetProduct: {
-        title: "Canon EOS R M50 Mark II",
-        image:
-          "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=400&auto=format&fit=crop",
-        estValue: "1400 ₾",
-      },
-      recipient: "ნიკა კ.",
-      offeredProduct: {
-        title: "MacBook Air M1",
-        image:
-          "https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?q=80&w=400&auto=format&fit=crop",
-        estValue: "1900 ₾",
-      },
-      status: "rejected",
-      timestamp: "12 სექტემბერი, 11:45",
-    },
-  ]);
-
   const categories = [
     { name: lang === "GE" ? "ტექნიკა" : "Electronics", icon: Smartphone },
     { name: lang === "GE" ? "ტანსაცმელი" : "Clothing", icon: Shirt },
@@ -444,8 +291,12 @@ export default function App() {
 
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
+    if (!supabase) {
+      alert(supabaseConfigurationError || "Supabase არ არის კონფიგურირებული.");
+      return;
+    }
 
-    if (supabase) {
+    try {
       const authResult =
         authMode === "signup"
           ? await supabase.auth.signUp({
@@ -460,28 +311,12 @@ export default function App() {
               password: authForm.password,
             });
 
-      if (authResult.error) {
-        alert(authResult.error.message);
-        return;
-      }
-
-      if (authResult.data.user) {
-        setCurrentUser({
-          id: authResult.data.user.id,
-          name:
-            authForm.fullName ||
-            authResult.data.user.user_metadata?.full_name ||
-            authForm.email.split("@")[0],
-          email: authForm.email,
-        });
-        completePendingAuthAction();
-      }
-    } else {
-      setCurrentUser({
-        name: authForm.fullName || authForm.email.split("@")[0],
-        email: authForm.email,
-      });
-      completePendingAuthAction();
+      if (authResult.error) throw authResult.error;
+      if (authResult.data.session) completePendingAuthAction();
+      else if (authMode === "signup") alert("რეგისტრაცია დასრულდა. ანგარიშის გასააქტიურებლად შეამოწმე ელ. ფოსტა.");
+    } catch (error) {
+      alert(error.message);
+      return;
     }
     setIsAuthModalOpen(false);
     setAuthForm({ fullName: "", email: "", password: "" });
@@ -497,12 +332,7 @@ export default function App() {
       return;
     }
 
-    setCurrentUser({
-      name: `${provider} User`,
-      email: `user@${provider.toLowerCase()}.com`,
-    });
-    setIsAuthModalOpen(false);
-    completePendingAuthAction();
+    alert(supabaseConfigurationError || "Supabase არ არის კონფიგურირებული.");
   };
 
   const handleLogout = async () => {
@@ -521,8 +351,9 @@ export default function App() {
     setSentMatches(sentMatches.filter((match) => match.id !== id));
   };
 
-  const handleOpenChat = ({ name, avatar, itemTitle, itemImage }) => {
-    setSelectedChatUser({ name, avatar, itemTitle, itemImage });
+  const handleOpenChat = ({ userId, name, avatar, itemTitle, itemImage }) => {
+    if (!userId) return;
+    setSelectedChatUser({ userId, name, avatar, itemTitle, itemImage });
     setActiveTab("chat");
   };
 
@@ -592,7 +423,7 @@ export default function App() {
       }
     }
 
-    setProfileSaveStatus(supabase ? "პროფილი შენახულია" : "დემო რეჟიმი: ლოკალურად შენახულია");
+    setProfileSaveStatus("პროფილი შენახულია");
   };
 
   const handleSendMessage = async (event) => {
@@ -601,10 +432,7 @@ export default function App() {
     if (!content || !selectedChatUser) return;
 
     if (!supabase || !currentUser?.id || !selectedChatUser.userId) {
-      setChatMessages((currentMessages) => [
-        ...currentMessages,
-        { id: crypto.randomUUID(), content, sender_id: currentUser?.id || "local", created_at: new Date().toISOString() },
-      ]);
+      alert(supabaseConfigurationError || "ჩატის გასაგზავნად ავტორიზაციაა საჭირო.");
       setMessageDraft("");
       return;
     }
@@ -619,7 +447,9 @@ export default function App() {
       .select()
       .single();
 
-    if (!error && data) {
+    if (error) {
+      alert(error.message);
+    } else if (data) {
       setChatMessages((currentMessages) => [...currentMessages, data]);
       setMessageDraft("");
     }
@@ -713,18 +543,31 @@ export default function App() {
       return;
     }
 
-    if (supabase && currentUser?.id) {
-      const filePath = `${currentUser.id}/${crypto.randomUUID()}.jpg`;
-      const { error: uploadError } = await supabase.storage
-        .from("listings")
-        .upload(filePath, capturedPhoto.blob, {
-          contentType: "image/jpeg",
-          upsert: false,
-        });
-      if (uploadError) {
-        alert(uploadError.message);
-        return;
-      }
+    if (!supabase || !currentUser?.id) {
+      alert(supabaseConfigurationError || "განცხადების დასამატებლად ავტორიზაციაა საჭირო.");
+      return;
+    }
+
+    const filePath = `${currentUser.id}/${crypto.randomUUID()}.jpg`;
+    const { error: uploadError } = await supabase.storage.from("listings").upload(filePath, capturedPhoto.blob, { contentType: "image/jpeg", upsert: false });
+    if (uploadError) {
+      alert(uploadError.message);
+      return;
+    }
+    const { data: publicUrlData } = supabase.storage.from("listings").getPublicUrl(filePath);
+    const { error: itemError } = await supabase.from("items").insert({
+      user_id: currentUser.id,
+      title: formData.title,
+      category: formData.category,
+      condition: formData.condition,
+      desired_trade: formData.desiredTrade,
+      description: formData.comment,
+      image_url: publicUrlData.publicUrl,
+      status: "active",
+    });
+    if (itemError) {
+      alert(itemError.message);
+      return;
     }
 
     alert("განცხადება წარმატებით დაემატა AI ანალიზისთვის! (საფასური: 1.00 ₾)");
@@ -946,6 +789,13 @@ export default function App() {
         {/* HOME PAGE */}
         {activeTab === "home" && (
           <div>
+            {supabaseConfigurationError && (
+              <div className="relative z-20 mx-auto max-w-xl px-3 pt-4">
+                <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                  {supabaseConfigurationError}
+                </div>
+              </div>
+            )}
             <div className="absolute inset-0 z-0 h-[480px]">
               <img
                 src="https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?q=80&w=2070&auto=format&fit=crop"
@@ -1121,7 +971,7 @@ export default function App() {
                   >
                     <Send className="w-10 h-10 mx-auto mb-2 opacity-40 text-[#FF5500]" />
                     <p className="text-xs font-bold">
-                      გაგზავნილი შეთავაზებები ჯერ არ არის
+                      მატჩები არ არის
                     </p>
                   </div>
                 ) : (
@@ -1286,7 +1136,7 @@ export default function App() {
                   }`}
                 >
                   <ArrowLeftRight className="w-10 h-10 mx-auto mb-2 opacity-40 text-[#FF5500]" />
-                  <p className="text-xs font-bold">შეთავაზებები ჯერ არ არის</p>
+                  <p className="text-xs font-bold">მატჩები არ არის</p>
                 </div>
               ) : (
                 filteredMatches.map((item) => (
@@ -1433,6 +1283,7 @@ export default function App() {
                         <button
                           onClick={() =>
                             handleOpenChat({
+                              userId: item.offeredProduct.userId,
                               name: item.offeredProduct.user,
                               avatar: item.offeredProduct.image,
                               itemTitle: item.offeredProduct.title,
@@ -1528,7 +1379,13 @@ export default function App() {
 
             {profileTab === "listings" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                {profileListings.map((listing) => (
+                {profileListings.length === 0 ? (
+                  <div className={`sm:col-span-2 md:col-span-3 rounded-xl border border-dashed p-8 text-center ${isDarkMode ? "border-slate-800 text-slate-400" : "border-slate-300 text-slate-500"}`}>
+                    <Package className="mx-auto mb-3 h-8 w-8 text-[#FF5500] opacity-70" />
+                    <p className="text-sm font-bold">არ გაქვთ ატვირთული ნივთები</p>
+                    <button type="button" onClick={() => setIsModalOpen(true)} className="mt-4 min-h-10 rounded-md bg-[#FF5500] px-4 text-xs font-bold text-white">დაამატე ნივთი</button>
+                  </div>
+                ) : profileListings.map((listing) => (
                   <article key={listing.id} className={`rounded-xl border overflow-hidden ${isDarkMode ? "bg-slate-900/90 border-slate-800" : "bg-white border-slate-200"}`}>
                     <img src={listing.image} alt={listing.title} className="w-full h-36 sm:h-40 object-cover" />
                     <div className="p-3 space-y-2">
@@ -1609,7 +1466,9 @@ export default function App() {
                   </span>
                 </div>
                 <div className="space-y-1">
-                  {chatConversations.map((conversation) => {
+                  {chatConversations.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-slate-800 p-6 text-center text-xs text-slate-400">ჩატები ცარიელია</div>
+                  ) : chatConversations.map((conversation) => {
                     const isSelected =
                       selectedChatUser?.name === conversation.name;
                     const preview =
@@ -1791,22 +1650,6 @@ export default function App() {
                         </div>
                       );
                     })}
-                    <div className="flex items-end gap-2">
-                      <img
-                        src={selectedChatUser.itemImage}
-                        alt={selectedChatUser.itemTitle}
-                        className="w-7 h-7 rounded-full object-cover"
-                      />
-                      <div
-                        className={`max-w-[80%] rounded-xl rounded-bl-sm px-3 py-2 text-xs ${
-                          isDarkMode
-                            ? "bg-slate-800 text-slate-200"
-                            : "bg-white border border-slate-200 text-slate-700"
-                        }`}
-                      >
-                        გამარჯობა! მოდი განვიხილოთ ჩვენი გაცვლა.
-                      </div>
-                    </div>
                     <div className="text-[10px] text-slate-500 text-center">
                       ჩატი გახსნილია {selectedChatUser.name}-თან
                     </div>
