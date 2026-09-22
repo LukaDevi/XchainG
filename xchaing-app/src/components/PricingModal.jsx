@@ -66,7 +66,7 @@ export default function PricingModal({ isOpen = true, onClose, onSelectPlan }) {
 
       if (subscriptionError) throw subscriptionError;
 
-      onSelectPlan?.(plan.id);
+      await onSelectPlan?.(plan.id);
       alert("ტარიფი წარმატებით შეიცვალა!");
       onClose?.();
     } catch (error) {

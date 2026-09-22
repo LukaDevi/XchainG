@@ -61,7 +61,10 @@ export default function App() {
 
   // Auth State
   const [currentUser, setCurrentUser] = useState(null);
-  const { plan: subscriptionPlan, loading: subscriptionLoading } = useSubscription(currentUser?.id);
+  const {
+    plan: subscriptionPlan,
+    refreshSubscription,
+  } = useSubscription(currentUser?.id);
   const [profileAvatar, setProfileAvatar] = useState("");
   const [profileUsername, setProfileUsername] = useState("");
   const [profileSaveStatus, setProfileSaveStatus] = useState("");
@@ -121,13 +124,6 @@ export default function App() {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isProfileLoading, setIsProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState("");
-
-  useEffect(() => {
-    if (isModalOpen && currentUser && !subscriptionLoading && subscriptionPlan === "free") {
-      setIsModalOpen(false);
-      setIsPricingOpen(true);
-    }
-  }, [currentUser, isModalOpen, subscriptionLoading, subscriptionPlan]);
 
   const syncProfileFromUser = async (user) => {
     if (!supabase || !user?.id) {
@@ -403,21 +399,54 @@ export default function App() {
   });
 
   // Handlers
-  const handleProtectedNavigation = (target) => {
+  const getLatestSubscriptionPlan = async (userId = currentUser?.id) => {
+    if (!supabase || !userId) return "free";
+
+    try {
+      const { data, error } = await supabase
+        .from("subscriptions")
+        .select("plan_type, status, expires_at")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      const normalizedPlan = String(data?.plan_type || "free").trim().toLowerCase();
+      const isExpired = data?.expires_at && new Date(data.expires_at) < new Date();
+      return data?.status?.toLowerCase() === "active" && !isExpired && normalizedPlan !== "free"
+        ? normalizedPlan
+        : "free";
+    } catch (error) {
+      console.error("Error checking latest subscription:", error);
+      return "free";
+    }
+  };
+
+  const handleProtectedNavigation = async (target) => {
     if (currentUser) {
       if (target === "listing") {
-        if (!subscriptionLoading && subscriptionPlan === "free") {
+        const latestPlan = await getLatestSubscriptionPlan();
+        if (latestPlan === "free") {
           alert("განცხადების დასამატებლად აირჩიე ფასიანი ტარიფი.");
           setIsPricingOpen(true);
           return;
         }
+        await refreshSubscription();
         setIsModalOpen(true);
       }
-      else if (target === "matches" && !subscriptionLoading && subscriptionPlan !== "pro") {
-        alert("AI სერვისებისა და მეჩინგებისთვის საჭიროა Pro ტარიფი.");
-        setIsPricingOpen(true);
+      else if (target === "matches") {
+        const latestPlan = await getLatestSubscriptionPlan();
+        if (latestPlan !== "pro") {
+          alert("AI სერვისებისა და მეჩინგებისთვის საჭიროა Pro ტარიფი.");
+          setIsPricingOpen(true);
+          return;
+        }
+        await refreshSubscription();
+        setActiveTab(target);
       }
-      else setActiveTab(target);
+      else {
+        setActiveTab(target);
+      }
       return;
     }
 
@@ -425,19 +454,23 @@ export default function App() {
     setIsAuthModalOpen(true);
   };
 
-  const completePendingAuthAction = () => {
+  const completePendingAuthAction = async () => {
     if (pendingAuthAction === "listing") {
-      if (!subscriptionLoading && subscriptionPlan === "free") {
+      const latestPlan = await getLatestSubscriptionPlan();
+      if (latestPlan === "free") {
         alert("განცხადების დასამატებლად აირჩიე ფასიანი ტარიფი.");
         setIsPricingOpen(true);
       } else {
+        await refreshSubscription();
         setIsModalOpen(true);
       }
     } else if (pendingAuthAction === "matches") {
-      if (!subscriptionLoading && subscriptionPlan !== "pro") {
+      const latestPlan = await getLatestSubscriptionPlan();
+      if (latestPlan !== "pro") {
         alert("AI სერვისებისა და მეჩინგებისთვის საჭიროა Pro ტარიფი.");
         setIsPricingOpen(true);
       } else {
+        await refreshSubscription();
         setActiveTab("matches");
       }
     } else if (pendingAuthAction) setActiveTab(pendingAuthAction);
@@ -755,12 +788,14 @@ export default function App() {
   const handleAddListing = async (e) => {
     e.preventDefault();
 
-    if (subscriptionPlan === "free") {
+    const latestPlan = await getLatestSubscriptionPlan();
+    if (latestPlan === "free") {
       alert("განცხადების დასამატებლად აირჩიე ფასიანი ტარიფი.");
       setIsPricingOpen(true);
       handleCloseListingModal();
       return;
     }
+    await refreshSubscription();
 
     if (!capturedPhoto?.blob) {
       alert("განცხადების დასამატებლად გადაიღე ნივთის ფოტო კამერით.");
@@ -837,6 +872,9 @@ export default function App() {
       <PricingModal
         isOpen={isPricingOpen}
         onClose={() => setIsPricingOpen(false)}
+        onSelectPlan={async () => {
+          await refreshSubscription();
+        }}
       />
 
       {/* 2. SIDEBAR */}

@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 
-const validPlans = new Set(["free", "basic", "pro"]);
-
 export function useSubscription(userId) {
   const [plan, setPlan] = useState("free");
   const [loading, setLoading] = useState(true);
@@ -10,16 +8,16 @@ export function useSubscription(userId) {
   useEffect(() => {
     let cancelled = false;
 
-    if (!userId || !supabase) {
-      setPlan("free");
-      setLoading(false);
-      return undefined;
-    }
-
-    setPlan("free");
-    setLoading(true);
-
     const fetchSubscription = async () => {
+      if (!userId || !supabase) {
+        if (!cancelled) {
+          setPlan("free");
+          setLoading(false);
+        }
+        return;
+      }
+
+      setLoading(true);
       try {
         const { data, error } = await supabase
           .from("subscriptions")
@@ -29,10 +27,11 @@ export function useSubscription(userId) {
 
         if (error) throw error;
 
+        const normalizedPlan = String(data?.plan_type || "free").trim().toLowerCase();
         const isExpired = data?.expires_at && new Date(data.expires_at) < new Date();
         const nextPlan =
-          data?.status === "active" && !isExpired && validPlans.has(data.plan_type)
-            ? data.plan_type
+          data?.status?.toLowerCase() === "active" && !isExpired && normalizedPlan !== "free"
+            ? normalizedPlan
             : "free";
 
         if (!cancelled) setPlan(nextPlan);
@@ -51,5 +50,39 @@ export function useSubscription(userId) {
     };
   }, [userId]);
 
-  return { plan, loading };
+  const refreshSubscription = async () => {
+    if (!userId || !supabase) {
+      setPlan("free");
+      return "free";
+    }
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("subscriptions")
+        .select("plan_type, status, expires_at")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      const normalizedPlan = String(data?.plan_type || "free").trim().toLowerCase();
+      const isExpired = data?.expires_at && new Date(data.expires_at) < new Date();
+      const nextPlan =
+        data?.status?.toLowerCase() === "active" && !isExpired && normalizedPlan !== "free"
+          ? normalizedPlan
+          : "free";
+
+      setPlan(nextPlan);
+      return nextPlan;
+    } catch (error) {
+      console.error("Error refreshing subscription:", error);
+      setPlan("free");
+      return "free";
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { plan, loading, refreshSubscription };
 }
