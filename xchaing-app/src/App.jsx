@@ -839,20 +839,13 @@ export default function App() {
                 </div>
               </div>
             )}
-            <div className="absolute inset-0 z-0 h-[480px]">
-              <div
-                className="absolute inset-0 w-full h-full bg-cover bg-center"
-                style={{
-                  background: "linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(15, 23, 42, 0.88) 100%), url('https://images.unsplash.com/photo-1556742049-0a67f2d45618?q=80&w=1920&auto=format&fit=crop')",
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
-                }}
-              />
+            <div className="absolute inset-0 z-0 h-[480px] bg-cover bg-center bg-no-repeat relative" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=1920&q=80')" }}>
+              <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-[1px]" />
             </div>
 
             <div className="relative z-10 max-w-xl mx-auto px-2.5 min-[360px]:px-3 sm:px-4 pt-10 sm:pt-12 pb-16 text-center space-y-6">
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-[1.05] drop-shadow-[0_4px_18px_rgba(15,23,42,0.9)]">
-                <span className="block">გაცვალე ნივთები მარტივად და უსაფრთხოდ</span>
+                <span className="block">გაცვალე ნივთები მარტივად</span>
               </h1>
 
               <p className="text-xs sm:text-sm text-slate-200 max-w-lg mx-auto font-medium leading-relaxed">
