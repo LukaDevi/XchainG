@@ -829,7 +829,11 @@ export default function App() {
       return;
     }
 
-    alert("განცხადება წარმატებით დაემატა AI ანალიზისთვის! (საფასური: 1.00 ₾)");
+    alert(
+      subscriptionPlan === "pro"
+        ? "განცხადება წარმატებით დაემატა AI შეფასებით! (საფასური: 0.50 ₾)"
+        : "განცხადება წარმატებით დაემატა! (საფასური: 1.00 ₾)",
+    );
     handleCloseListingModal();
   };
 
@@ -2330,13 +2334,13 @@ export default function App() {
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-[#FF5500]" />
+                {subscriptionPlan === "pro" && <Sparkles className="w-4 h-4 text-[#FF5500]" />}
                   <span className="font-medium">
                     {subscriptionPlan === "pro" ? "გამოქვეყნება + AI შეფასება:" : "განცხადების გამოქვეყნება:"}
                   </span>
                 </div>
                 <span className="font-black text-[#FF5500] text-sm">
-                  {subscriptionPlan === "pro" ? "1.00 ₾" : "Basic"}
+                  {subscriptionPlan === "pro" ? "0.50 ₾" : "1.00 ₾"}
                 </span>
               </div>
 
@@ -2345,7 +2349,7 @@ export default function App() {
                 className="w-full min-h-11 bg-[#FF5500] hover:bg-[#e04b00] active:scale-98 text-white font-bold py-3 rounded-lg text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-[#FF5500]/25"
               >
                 {subscriptionPlan === "pro" && <Sparkles className="w-4 h-4" />}
-                <span>{subscriptionPlan === "pro" ? "გამოქვეყნება (1.00 ₾)" : "განცხადების გამოქვეყნება"}</span>
+                <span>{subscriptionPlan === "pro" ? "გამოქვეყნება (0.50 ₾)" : "განცხადების გამოქვეყნება (1.00 ₾)"}</span>
               </button>
             </form>
           </div>
