@@ -733,7 +733,6 @@ export default function App() {
           { label: "Home", onClick: () => setActiveTab("home") },
           { label: "Items", onClick: () => handleProtectedNavigation("listing") },
           { label: "How it Works", onClick: () => setActiveTab("home") },
-          { label: "Login", onClick: () => setIsAuthModalOpen(true) },
         ]}
       />
 
@@ -852,15 +851,15 @@ export default function App() {
             </div>
 
             <div className="relative z-10 max-w-xl mx-auto px-2.5 min-[360px]:px-3 sm:px-4 pt-10 sm:pt-12 pb-16 text-center space-y-6">
-              <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight leading-tight drop-shadow-[0_2px_10px_rgba(15,23,42,0.8)]">
-                <span className="block">გაცვალე ნივთები მარტივად</span>
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-[1.05] drop-shadow-[0_4px_18px_rgba(15,23,42,0.9)]">
+                <span className="block">გაცვალე ნივთები მარტივად და უსაფრთხოდ</span>
               </h1>
 
-              <p className="text-xs sm:text-sm text-slate-200 max-w-md mx-auto font-medium leading-relaxed">
-                უსაფრთხო და პირდაპირი ბარტერი სხვადასხვა ნივთებს შორის.
+              <p className="text-xs sm:text-sm text-slate-200 max-w-lg mx-auto font-medium leading-relaxed">
+                იპოვე სასურველი ნივთი, მიიტანე swap შეთავაზება და გაცვალე უსაფრთხოდ ჩვენი community-თან.
               </p>
 
-              <div className="pt-2 max-w-md mx-auto">
+              <div className="pt-2 max-w-xl mx-auto">
                 <div className="flex gap-2">
                   <div
                     className={`flex-1 backdrop-blur-md border rounded-md flex items-center px-3.5 py-2.5 text-xs transition shadow-lg ${
@@ -896,13 +895,19 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="pt-2">
+              <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
                 <button
                   onClick={() => handleProtectedNavigation("listing")}
-                  className="w-full min-h-11 sm:w-auto bg-[#FF5500] hover:bg-[#e04b00] active:scale-95 text-white font-bold px-6 py-3 rounded-md text-xs transition shadow-lg shadow-[#FF5500]/30 inline-flex items-center justify-center gap-2"
+                  className="w-full sm:w-auto min-h-11 bg-[#FF5500] hover:bg-[#e04b00] active:scale-95 text-white font-bold px-6 py-3 rounded-md text-xs transition shadow-lg shadow-[#FF5500]/30 inline-flex items-center justify-center gap-2"
                 >
-                  <span>დაამატე განცხადება (1.00 ₾)</span>
+                  <span>დაამატე განცხადება</span>
                   <ArrowRight className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setActiveTab("home")}
+                  className="w-full sm:w-auto min-h-11 border border-white/20 bg-white/5 text-white hover:bg-white/10 backdrop-blur-md font-bold px-6 py-3 rounded-md text-xs transition"
+                >
+                  იპოვე ნივთი
                 </button>
               </div>
             </div>

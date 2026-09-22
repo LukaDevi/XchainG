@@ -98,7 +98,7 @@ export default function LandingHeader({
               onClick={onOpenAuth}
               className="inline-flex items-center justify-center rounded-md border border-[#FF5500]/40 bg-[#FF5500] px-3 py-2 text-xs font-bold text-white shadow-lg shadow-[#FF5500]/20 transition hover:bg-[#e04b00]"
             >
-              Login
+              Get Started
             </button>
           )}
         </div>
