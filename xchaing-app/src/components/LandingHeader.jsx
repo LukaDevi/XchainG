@@ -8,6 +8,7 @@ export default function LandingHeader({
   onLogout,
   onOpenSidebar,
   onNavigateHome,
+  onOpenPricing,
   navItems,
 }) {
   return (
@@ -48,6 +49,13 @@ export default function LandingHeader({
               {item.label}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={onOpenPricing}
+            className="text-sm font-medium text-slate-300 transition hover:text-[#FF5500]"
+          >
+            ტარიფები
+          </button>
         </nav>
 
         <div className="flex items-center gap-2">

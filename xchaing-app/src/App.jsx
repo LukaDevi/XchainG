@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import LandingHeader from "./components/LandingHeader";
+import PricingModal from "./components/PricingModal";
 import { supabase, supabaseConfigurationError } from "./lib/supabase";
 import {
   Menu,
@@ -53,6 +54,7 @@ export default function App() {
   // Modals & Sidebar State
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isPricingOpen, setIsPricingOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [pendingAuthAction, setPendingAuthAction] = useState(null);
 
@@ -774,11 +776,17 @@ export default function App() {
         onLogout={handleLogout}
         onOpenSidebar={() => setIsSidebarOpen(true)}
         onNavigateHome={() => setActiveTab("home")}
+        onOpenPricing={() => setIsPricingOpen(true)}
         navItems={[
           { label: "Home", onClick: () => { setActiveTab("home"); window.scrollTo({ top: 0, behavior: "smooth" }); } },
           { label: "Items", onClick: () => { setActiveTab("home"); scrollToSection("categories-section"); } },
           { label: "How it Works", onClick: () => { setActiveTab("home"); scrollToSection("user-flow-section"); } },
         ]}
+      />
+
+      <PricingModal
+        isOpen={isPricingOpen}
+        onClose={() => setIsPricingOpen(false)}
       />
 
       {/* 2. SIDEBAR */}
