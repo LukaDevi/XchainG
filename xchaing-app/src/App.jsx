@@ -38,6 +38,9 @@ import {
   ShieldCheck,
   Trash2,
   Apple,
+  Camera,
+  Mail,
+  LoaderCircle,
 } from "lucide-react";
 
 export default function App() {
@@ -100,36 +103,108 @@ export default function App() {
   }, [chatMessages]);
   const [chatConversations, setChatConversations] = useState([]);
   const [profileTab, setProfileTab] = useState("listings");
-  const [profileForm, setProfileForm] = useState({ name: "", phone: "", location: "", bio: "" });
+  const [profileForm, setProfileForm] = useState({ full_name: "", phone: "", bio: "" });
   const [profileListings, setProfileListings] = useState([]);
   const [profileHistory] = useState([]);
   const [savedListings] = useState([]);
   const [matches, setMatches] = useState([]);
   const [sentMatches, setSentMatches] = useState([]);
+  const [isProfileEditorOpen, setIsProfileEditorOpen] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isProfileLoading, setIsProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState("");
+
+  const syncProfileFromUser = async (user) => {
+    if (!supabase || !user?.id) {
+      return;
+    }
+
+    const fallbackName = user.user_metadata?.full_name || user.email?.split("@")[0] || "User";
+
+    try {
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("id, full_name, phone, bio, avatar_url, email")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profileError && profileError.code !== "PGRST116") {
+        throw profileError;
+      }
+
+      const nextProfile = {
+        full_name: profile?.full_name || fallbackName,
+        phone: profile?.phone || "",
+        bio: profile?.bio || "",
+      };
+
+      setProfileForm(nextProfile);
+      setProfileAvatar(profile?.avatar_url || "");
+      setProfileUsername(user.user_metadata?.username || user.email?.split("@")[0] || "user");
+
+      if (!profile) {
+        const { error: upsertError } = await supabase.from("profiles").upsert(
+          {
+            id: user.id,
+            email: user.email,
+            full_name: fallbackName,
+            avatar_url: "",
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "id" },
+        );
+
+        if (upsertError) {
+          console.error("Profile initialization error:", upsertError);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to sync profile:", error);
+      setProfileForm({ full_name: fallbackName, phone: "", bio: "" });
+      setProfileAvatar("");
+      setProfileUsername(user.email?.split("@")[0] || "user");
+      setProfileError(error?.message || "Unable to load profile.");
+    }
+  };
 
   useEffect(() => {
     if (!supabase) return undefined;
 
-    const applySession = (user) => {
+    const applySession = async (user) => {
       if (user) {
-        setCurrentUser({
+        const nextUser = {
           id: user.id,
           email: user.email,
-          name: user.user_metadata?.full_name || user.email?.split("@")[0],
-        });
-        supabase.from("profiles").upsert({
-          id: user.id,
-          full_name: user.user_metadata?.full_name || user.email?.split("@")[0],
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "id" });
+          name: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
+        };
+
+        setCurrentUser(nextUser);
+        await syncProfileFromUser(user);
       } else {
         setCurrentUser(null);
+        setProfileForm({ full_name: "", phone: "", bio: "" });
+        setProfileAvatar("");
+        setProfileUsername("");
+        setProfileError("");
         setIsModalOpen(false);
         setActiveTab((tab) => (tab === "home" ? tab : "home"));
       }
     };
 
-    supabase.auth.getSession().then(({ data }) => applySession(data.session?.user));
+    const initializeUser = async () => {
+      setIsProfileLoading(true);
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError) {
+        setProfileError(userError.message);
+        setIsProfileLoading(false);
+        return;
+      }
+      await applySession(userData?.user ?? null);
+      setIsProfileLoading(false);
+    };
+
+    initializeUser();
     const { data: authSubscription } = supabase.auth.onAuthStateChange(
       (_event, session) => applySession(session?.user),
     );
@@ -143,14 +218,17 @@ export default function App() {
     let channel;
     const loadDatabaseState = async () => {
       const [{ data: profile }, { data: allItems }, { data: messages }] = await Promise.all([
-        supabase.from("profiles").select("full_name, username, bio, location, phone, avatar_url").eq("id", currentUser.id).maybeSingle(),
+        supabase.from("profiles").select("full_name, bio, phone, avatar_url").eq("id", currentUser.id).maybeSingle(),
         supabase.from("items").select("*").order("created_at", { ascending: false }),
         supabase.from("messages").select("*").or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`).order("created_at", { ascending: false }),
       ]);
 
       if (profile) {
-        setProfileForm({ name: profile.full_name || currentUser.name || "", phone: profile.phone || "", location: profile.location || "", bio: profile.bio || "" });
-        setProfileUsername(profile.username || "");
+        setProfileForm({
+          full_name: profile.full_name || currentUser.name || "",
+          phone: profile.phone || "",
+          bio: profile.bio || "",
+        });
         setProfileAvatar(profile.avatar_url || "");
       }
 
@@ -366,74 +444,109 @@ export default function App() {
     if (!file) return;
 
     if (!supabase || !currentUser?.id) {
-      setAvatarUploadStatus("დააკავშირე Supabase ავატარის ასატვირთად");
+      alert(supabaseConfigurationError || "Sign in to upload your profile photo.");
       return;
     }
 
-    setAvatarUploadStatus("იტვირთება...");
-    const filePath = `${currentUser.id}/${crypto.randomUUID()}-${file.name}`;
-    const { error: uploadError } = await supabase.storage
-      .from("avatars")
-      .upload(filePath, file, { upsert: true, contentType: file.type });
+    setIsUploadingAvatar(true);
+    setAvatarUploadStatus("Uploading photo...");
 
-    if (uploadError) {
-      setAvatarUploadStatus(uploadError.message);
-      return;
+    try {
+      const fileExt = (file.name.split(".").pop() || "jpg").toLowerCase();
+      const filePath = `${currentUser.id}/${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, file, { upsert: true, contentType: file.type || "image/jpeg" });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data: publicUrlData } = supabase.storage.from("avatars").getPublicUrl(filePath);
+      const avatarUrl = publicUrlData?.publicUrl;
+
+      if (!avatarUrl) {
+        throw new Error("Unable to generate the public avatar URL.");
+      }
+
+      const { error: profileError } = await supabase.from("profiles").upsert(
+        {
+          id: currentUser.id,
+          avatar_url: avatarUrl,
+          full_name: profileForm.full_name || currentUser.name || "User",
+          phone: profileForm.phone || "",
+          bio: profileForm.bio || "",
+          email: currentUser.email || null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id" },
+      );
+
+      if (profileError) {
+        throw profileError;
+      }
+
+      setProfileAvatar(avatarUrl);
+      setAvatarUploadStatus("Profile photo updated successfully.");
+      alert("Profile photo updated successfully.");
+    } catch (error) {
+      const message = error?.message || "Unable to upload avatar.";
+      setAvatarUploadStatus(message);
+      alert(message);
+    } finally {
+      setIsUploadingAvatar(false);
+      if (event.target) event.target.value = "";
     }
-
-    const { data: publicUrlData } = supabase.storage
-      .from("avatars")
-      .getPublicUrl(filePath);
-    const avatarUrl = publicUrlData.publicUrl;
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .upsert({ id: currentUser.id, avatar_url: avatarUrl }, { onConflict: "id" });
-
-    if (profileError) {
-      setAvatarUploadStatus(profileError.message);
-      return;
-    }
-
-    setProfileAvatar(avatarUrl);
-    setAvatarUploadStatus("ავატარი განახლდა");
   };
 
   const handleSaveProfile = async (event) => {
     event.preventDefault();
-    setProfileSaveStatus("ინახება...");
+    setIsSavingProfile(true);
+    setProfileSaveStatus("Saving...");
 
-    const savedProfile = {
-      name: profileForm.name.trim(),
-      phone: profileForm.phone.trim(),
-      location: profileForm.location.trim(),
-      bio: profileForm.bio.trim(),
-    };
-    const savedUsername = profileUsername.trim();
+    try {
+      if (!supabase || !currentUser?.id) {
+        throw new Error(supabaseConfigurationError || "Sign in to update your profile.");
+      }
 
-    if (supabase && currentUser?.id) {
+      const sanitizedFullName = profileForm.full_name.trim();
+      const sanitizedPhone = profileForm.phone.trim();
+      const sanitizedBio = profileForm.bio.trim();
+
       const { error } = await supabase.from("profiles").upsert(
         {
           id: currentUser.id,
-          full_name: savedProfile.name,
-          username: savedUsername,
-          phone: savedProfile.phone,
-          location: savedProfile.location,
-          bio: savedProfile.bio,
-          avatar_url: profileAvatar,
+          full_name: sanitizedFullName || currentUser.name || "User",
+          phone: sanitizedPhone,
+          bio: sanitizedBio,
+          email: currentUser.email || null,
+          avatar_url: profileAvatar || null,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "id" },
       );
 
       if (error) {
-        setProfileSaveStatus(error.message);
-        return;
+        throw error;
       }
-    }
 
-    setProfileForm(savedProfile);
-    setProfileUsername(savedUsername);
-    setProfileSaveStatus("პროფილი შენახულია");
+      setCurrentUser((prev) => (prev ? { ...prev, name: sanitizedFullName || prev.name } : prev));
+      setProfileForm({
+        full_name: sanitizedFullName || currentUser.name || "User",
+        phone: sanitizedPhone,
+        bio: sanitizedBio,
+      });
+      setProfileSaveStatus("Profile saved successfully.");
+      setIsProfileEditorOpen(false);
+      alert("Profile updated successfully.");
+    } catch (error) {
+      const message = error?.message || "Unable to save profile.";
+      setProfileSaveStatus(message);
+      alert(message);
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   const handleSendMessage = async (event) => {
@@ -1305,7 +1418,7 @@ export default function App() {
         {activeTab === "profile" && currentUser && (
           <div className="max-w-3xl mx-auto px-2.5 min-[360px]:px-3 sm:px-4 py-5 sm:py-6 pb-24 space-y-4">
             <section
-              className={`rounded-xl border p-4 sm:p-6 ${
+              className={`rounded-2xl border p-4 sm:p-6 ${
                 isDarkMode
                   ? "bg-slate-900/90 border-slate-800"
                   : "bg-white border-slate-200"
@@ -1313,57 +1426,102 @@ export default function App() {
             >
               <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                 <div className="relative shrink-0 self-center sm:self-auto">
-                  <img
-                    src={profileAvatar}
-                    alt="ლუკა გოგოტიშვილი"
-                    className="w-24 h-24 rounded-full object-cover border-4 border-[#FF5500]/30"
-                  />
+                  <div className="relative">
+                    {profileAvatar ? (
+                      <img
+                        src={profileAvatar}
+                        alt={profileForm.full_name || currentUser.name || "Profile"}
+                        className="w-24 h-24 rounded-full object-cover border-4 border-[#FF5500]/30 shadow-lg shadow-[#FF5500]/10"
+                      />
+                    ) : (
+                      <div className="flex h-24 w-24 items-center justify-center rounded-full border-4 border-[#FF5500]/30 bg-slate-800 text-xl font-black text-[#FF5500] shadow-lg shadow-[#FF5500]/10">
+                        {profileForm.full_name ? profileForm.full_name.charAt(0).toUpperCase() : "U"}
+                      </div>
+                    )}
+                    {isUploadingAvatar && (
+                      <div className="absolute inset-0 flex items-center justify-center rounded-full bg-slate-950/60">
+                        <LoaderCircle className="h-6 w-6 animate-spin text-[#FF5500]" />
+                      </div>
+                    )}
+                  </div>
                   <input ref={avatarInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
                   <button
                     type="button"
                     onClick={() => avatarInputRef.current?.click()}
-                    title="პროფილის ფოტოს შეცვლა"
+                    title="Update profile photo"
                     className="absolute bottom-0 right-0 w-9 h-9 rounded-full bg-[#FF5500] text-white flex items-center justify-center border-4 border-slate-900 transition hover:scale-105"
                   >
-                    <Edit3 className="w-4 h-4" />
+                    <Camera className="w-4 h-4" />
                   </button>
                 </div>
+
                 <div className="min-w-0 flex-1 text-center sm:text-left">
                   <div className="flex flex-wrap justify-center sm:justify-start items-center gap-2">
                     <h1 className="text-xl sm:text-2xl font-black truncate">
-                      {profileForm.name}
+                      {profileForm.full_name || currentUser.name || "Your profile"}
                     </h1>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 text-[10px] font-bold text-amber-400">
-                      <Star className="w-3 h-3 fill-current" /> 5.0 (12 გაცვლა)
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsProfileEditorOpen(true)}
+                      className="inline-flex items-center gap-1 rounded-full border border-[#FF5500]/30 bg-[#FF5500]/10 px-2.5 py-1 text-[10px] font-bold text-[#FF5500] transition hover:bg-[#FF5500]/20"
+                    >
+                      <Edit3 className="w-3 h-3" />
+                      Edit Profile
+                    </button>
                   </div>
-                  <p className="text-sm text-slate-400 mt-1">@{profileUsername}</p>
-                  {avatarUploadStatus && <p className="text-[10px] text-[#FF5500] mt-1">{avatarUploadStatus}</p>}
-                  <p className="text-xs text-slate-400 mt-2 max-w-lg mx-auto sm:mx-0 line-clamp-2">
-                    {profileForm.bio}
-                  </p>
-                  <div className="flex flex-wrap justify-center sm:justify-start gap-3 mt-3 text-[10px] text-slate-400">
-                    <span className="inline-flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-[#FF5500]" /> {profileForm.location}</span>
-                    <span className="inline-flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-[#FF5500]" /> {profileForm.phone || "ტელეფონი მითითებული არ არის"}</span>
+
+                  <div className="mt-2 flex flex-wrap justify-center sm:justify-start gap-3 text-[11px] text-slate-400">
+                    {currentUser.email && (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5 text-[#FF5500]" />
+                        {currentUser.email}
+                      </span>
+                    )}
+                    {profileForm.phone && (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Phone className="w-3.5 h-3.5 text-[#FF5500]" />
+                        {profileForm.phone}
+                      </span>
+                    )}
                   </div>
+
+                  {avatarUploadStatus && <p className="text-[10px] text-[#FF5500] mt-2">{avatarUploadStatus}</p>}
+                  {profileForm.bio ? (
+                    <p className="text-xs text-slate-300 mt-3 max-w-lg mx-auto sm:mx-0 leading-relaxed">
+                      {profileForm.bio}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-slate-500 mt-3 max-w-lg mx-auto sm:mx-0 leading-relaxed">
+                      Add a short bio so people can learn more about you.
+                    </p>
+                  )}
                 </div>
               </div>
 
-              <div className="mt-6">
+              <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className={`rounded-lg border p-3 text-center max-w-xs ${isDarkMode ? "bg-slate-950/60 border-slate-800" : "bg-slate-50 border-slate-200"}`}>
                   <PackageCheck className="w-4 h-4 mx-auto mb-1 text-[#FF5500]" />
                   <p className="text-base sm:text-lg font-black">{profileListings.length}</p>
-                  <p className="text-[9px] sm:text-[10px] text-slate-400 leading-tight">აქტიური განცხადებები</p>
+                  <p className="text-[9px] sm:text-[10px] text-slate-400 leading-tight">Active listings</p>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="inline-flex items-center justify-center gap-2 rounded-md border border-red-500/30 bg-red-500/5 px-4 py-2 text-xs font-bold text-red-400 transition hover:bg-red-500/10"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  Sign Out
+                </button>
               </div>
             </section>
 
             <div className={`grid grid-cols-2 sm:grid-cols-4 gap-1 p-1 rounded-lg border text-[10px] sm:text-xs font-bold ${isDarkMode ? "bg-slate-900 border-slate-800" : "bg-slate-100 border-slate-200"}`}>
               {[
-                ["listings", "ჩემი განცხადებები"],
-                ["history", "ისტორია"],
-                ["saved", "შენახულები"],
-                ["settings", "ინფო"],
+                ["listings", "My Listings"],
+                ["history", "History"],
+                ["saved", "Saved"],
+                ["settings", "Info"],
               ].map(([tab, label]) => (
                 <button
                   key={tab}
@@ -1380,8 +1538,8 @@ export default function App() {
                 {profileListings.length === 0 ? (
                   <div className={`sm:col-span-2 md:col-span-3 rounded-xl border border-dashed p-8 text-center ${isDarkMode ? "border-slate-800 text-slate-400" : "border-slate-300 text-slate-500"}`}>
                     <Package className="mx-auto mb-3 h-8 w-8 text-[#FF5500] opacity-70" />
-                    <p className="text-sm font-bold">არ გაქვთ ატვირთული ნივთები</p>
-                    <button type="button" onClick={() => setIsModalOpen(true)} className="mt-4 min-h-10 rounded-md bg-[#FF5500] px-4 text-xs font-bold text-white">დაამატე ნივთი</button>
+                    <p className="text-sm font-bold">You do not have any listings yet.</p>
+                    <button type="button" onClick={() => setIsModalOpen(true)} className="mt-4 min-h-10 rounded-md bg-[#FF5500] px-4 text-xs font-bold text-white">Add Listing</button>
                   </div>
                 ) : profileListings.map((listing) => (
                   <article key={listing.id} className={`rounded-xl border overflow-hidden ${isDarkMode ? "bg-slate-900/90 border-slate-800" : "bg-white border-slate-200"}`}>
@@ -1391,8 +1549,8 @@ export default function App() {
                       <h2 className="text-sm font-bold line-clamp-2 min-h-10">{listing.title}</h2>
                       <p className="text-xs font-black">{listing.value}</p>
                       <div className="flex gap-2 pt-1">
-                        <button className="min-h-10 flex-1 rounded-md border border-slate-700 text-[10px] font-bold text-slate-400 hover:text-[#FF5500] transition">რედაქტირება</button>
-                        <button onClick={() => handleMarkListingTraded(listing.id)} className="min-h-10 flex-1 rounded-md bg-[#FF5500] text-white text-[10px] font-bold hover:bg-[#e04b00] transition">გაცვლილია</button>
+                        <button className="min-h-10 flex-1 rounded-md border border-slate-700 text-[10px] font-bold text-slate-400 hover:text-[#FF5500] transition">Edit</button>
+                        <button onClick={() => handleMarkListingTraded(listing.id)} className="min-h-10 flex-1 rounded-md bg-[#FF5500] text-white text-[10px] font-bold hover:bg-[#e04b00] transition">Traded</button>
                       </div>
                     </div>
                   </article>
@@ -1424,17 +1582,81 @@ export default function App() {
             )}
 
             {profileTab === "settings" && (
-              <form className={`rounded-xl border p-4 sm:p-5 space-y-4 ${isDarkMode ? "bg-slate-900/90 border-slate-800" : "bg-white border-slate-200"}`} onSubmit={(event) => event.preventDefault()}>
-                <div className="flex items-center gap-2"><Settings className="w-4 h-4 text-[#FF5500]" /><h2 className="text-sm font-bold">პროფილის ინფო</h2></div>
-                {[["name", "სახელი და გვარი"], ["phone", "ტელეფონის ნომერი"], ["location", "მდებარეობა"]].map(([key, label]) => (
-                  <label key={key} className="block text-[11px] font-bold text-slate-400">{label}<input value={profileForm[key]} onChange={(event) => setProfileForm({ ...profileForm, [key]: event.target.value })} className={`mt-1 w-full min-h-11 rounded-md border p-2.5 text-xs focus:outline-none focus:border-[#FF5500] focus:ring-2 focus:ring-[#FF5500]/30 ${isDarkMode ? "bg-slate-950 border-slate-800 text-white" : "bg-slate-50 border-slate-200 text-slate-900"}`} /></label>
-                ))}
-                <label className="block text-[11px] font-bold text-slate-400">მომხმარებლის სახელი<input value={profileUsername} onChange={(event) => setProfileUsername(event.target.value.replace(/^@/, ""))} className={`mt-1 w-full min-h-11 rounded-md border p-2.5 text-xs focus:outline-none focus:border-[#FF5500] focus:ring-2 focus:ring-[#FF5500]/30 ${isDarkMode ? "bg-slate-950 border-slate-800 text-white" : "bg-slate-50 border-slate-200 text-slate-900"}`} /></label>
-                <label className="block text-[11px] font-bold text-slate-400">ბიო<textarea rows={3} value={profileForm.bio} onChange={(event) => setProfileForm({ ...profileForm, bio: event.target.value })} className={`mt-1 w-full rounded-md border p-2.5 text-xs resize-none focus:outline-none focus:border-[#FF5500] ${isDarkMode ? "bg-slate-950 border-slate-800 text-white" : "bg-slate-50 border-slate-200 text-slate-900"}`} /></label>
-                {profileSaveStatus && <p className="text-[10px] text-[#FF5500]">{profileSaveStatus}</p>}
-                <div className="flex flex-col sm:flex-row gap-2"><button type="submit" onClick={handleSaveProfile} className="min-h-11 flex-1 rounded-md bg-[#FF5500] text-white text-xs font-bold hover:bg-[#e04b00] transition">ცვლილებების შენახვა</button><button type="button" onClick={handleLogout} className="min-h-11 rounded-md border border-red-500/30 px-4 text-xs font-bold text-red-400 hover:bg-red-500/10 transition">გამოსვლა</button></div>
-              </form>
+              <div className={`rounded-xl border p-4 sm:p-5 ${isDarkMode ? "bg-slate-900/90 border-slate-800" : "bg-white border-slate-200"}`}>
+                <div className="flex items-center gap-2 mb-3"><Settings className="w-4 h-4 text-[#FF5500]" /><h2 className="text-sm font-bold">Profile Details</h2></div>
+                <div className="space-y-3 text-sm">
+                  <div className="flex items-center gap-2"><User className="w-4 h-4 text-[#FF5500]" /><span>{profileForm.full_name || currentUser.name || "No name set"}</span></div>
+                  {profileForm.phone ? <div className="flex items-center gap-2"><Phone className="w-4 h-4 text-[#FF5500]" /><span>{profileForm.phone}</span></div> : null}
+                  {currentUser.email ? <div className="flex items-center gap-2"><Mail className="w-4 h-4 text-[#FF5500]" /><span>{currentUser.email}</span></div> : null}
+                  {profileForm.bio ? <div className="pt-2 text-xs text-slate-300 leading-relaxed">{profileForm.bio}</div> : <div className="pt-2 text-xs text-slate-500">No bio set yet.</div>}
+                </div>
+              </div>
             )}
+          </div>
+        )}
+
+        {isProfileEditorOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4">
+            <div className={`w-full max-w-lg rounded-2xl border p-4 sm:p-5 shadow-2xl ${isDarkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"}`}>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div className="flex items-center gap-2">
+                  <Edit3 className="w-4 h-4 text-[#FF5500]" />
+                  <h2 className="text-base font-black">Edit Profile</h2>
+                </div>
+                <button type="button" onClick={() => setIsProfileEditorOpen(false)} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveProfile} className="space-y-4">
+                <label className="block text-[11px] font-bold text-slate-400">
+                  Full name
+                  <input
+                    value={profileForm.full_name}
+                    onChange={(event) => setProfileForm({ ...profileForm, full_name: event.target.value })}
+                    className={`mt-1 w-full min-h-11 rounded-md border p-2.5 text-xs focus:outline-none focus:border-[#FF5500] focus:ring-2 focus:ring-[#FF5500]/30 ${isDarkMode ? "bg-slate-950 border-slate-800 text-white" : "bg-slate-50 border-slate-200 text-slate-900"}`}
+                  />
+                </label>
+
+                <label className="block text-[11px] font-bold text-slate-400">
+                  Phone number
+                  <input
+                    value={profileForm.phone}
+                    onChange={(event) => setProfileForm({ ...profileForm, phone: event.target.value })}
+                    className={`mt-1 w-full min-h-11 rounded-md border p-2.5 text-xs focus:outline-none focus:border-[#FF5500] focus:ring-2 focus:ring-[#FF5500]/30 ${isDarkMode ? "bg-slate-950 border-slate-800 text-white" : "bg-slate-50 border-slate-200 text-slate-900"}`}
+                  />
+                </label>
+
+                <label className="block text-[11px] font-bold text-slate-400">
+                  Bio / description
+                  <textarea
+                    rows={4}
+                    value={profileForm.bio}
+                    onChange={(event) => setProfileForm({ ...profileForm, bio: event.target.value })}
+                    className={`mt-1 w-full rounded-md border p-2.5 text-xs resize-none focus:outline-none focus:border-[#FF5500] ${isDarkMode ? "bg-slate-950 border-slate-800 text-white" : "bg-slate-50 border-slate-200 text-slate-900"}`}
+                  />
+                </label>
+
+                {profileSaveStatus && <p className="text-[10px] text-[#FF5500]">{profileSaveStatus}</p>}
+
+                <div className="flex flex-col-reverse sm:flex-row gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsProfileEditorOpen(false)}
+                    className="min-h-11 flex-1 rounded-md border border-slate-700 px-4 text-xs font-bold text-slate-300 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingProfile}
+                    className="min-h-11 flex-1 rounded-md bg-[#FF5500] text-white text-xs font-bold hover:bg-[#e04b00] transition disabled:opacity-60"
+                  >
+                    {isSavingProfile ? "Saving..." : "Save Changes"}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
 
