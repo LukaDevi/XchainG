@@ -839,71 +839,76 @@ export default function App() {
                 </div>
               </div>
             )}
-            <div className="absolute inset-0 z-0 h-[560px] bg-cover bg-center bg-no-repeat relative" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=1920&q=80')" }}>
+            <div className="relative h-[560px] overflow-hidden">
+              <div
+                className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+                style={{ backgroundImage: "url('https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=1920&q=80')" }}
+              />
               <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-[1px]" />
-              <div className="absolute inset-x-0 top-20 z-10 flex flex-col items-center justify-center text-center px-4">
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight leading-[1.05] text-white drop-shadow-[0_4px_18px_rgba(15,23,42,0.9)]">
-                  <span className="block">გაცვალე ნივთები</span>
-                  <span className="mt-1 block text-[#FF5500]">მარტივად</span>
-                </h1>
-                <p className="mt-4 max-w-xl text-xs sm:text-sm text-slate-200 font-medium leading-relaxed">
-                  იპოვე სასურველი ნივთი, მიიტანე swap შეთავაზება და გაცვალე უსაფრთხოდ ჩვენი community-თან.
-                </p>
-              </div>
-            </div>
 
-            <div className="relative z-10 max-w-xl mx-auto px-2.5 min-[360px]:px-3 sm:px-4 pt-40 sm:pt-44 pb-16 text-center space-y-6">
-
-              <div className="pt-2 max-w-xl mx-auto">
-                <div className="flex gap-2">
-                  <div
-                    className={`flex-1 backdrop-blur-md border rounded-md flex items-center px-3.5 py-2.5 text-xs transition shadow-lg ${
-                      isDarkMode
-                        ? "bg-slate-900/80 border-slate-700/80 focus-within:border-[#FF5500]"
-                        : "bg-white/90 border-slate-300 focus-within:border-[#FF5500]"
-                    }`}
-                  >
-                    <Search className="w-4 h-4 text-[#FF5500] mr-2 shrink-0" />
-                    <input
-                      type="text"
-                      placeholder={
-                        lang === "GE"
-                          ? "რა ნივთის გაცვლა გსურს?"
-                          : "Search items or services..."
-                      }
-                      className={`min-h-10 bg-transparent border-none focus:outline-none w-full font-medium ${
-                        isDarkMode
-                          ? "text-white placeholder-slate-400"
-                          : "text-slate-900 placeholder-slate-500"
-                      }`}
-                    />
-                  </div>
-                  <button
-                    className={`min-h-11 min-w-11 backdrop-blur-md border p-2.5 rounded-md transition flex items-center justify-center ${
-                      isDarkMode
-                        ? "bg-slate-900/80 border-slate-700/80 text-slate-300 hover:text-[#FF5500]"
-                        : "bg-white/90 border-slate-300 text-slate-700 hover:text-[#FF5500]"
-                    }`}
-                  >
-                    <SlidersHorizontal className="w-4 h-4" />
-                  </button>
+              <div className="absolute inset-x-0 top-20 z-10 px-4 sm:px-6">
+                <div className="mx-auto max-w-3xl text-center">
+                  <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight leading-[1.05] text-white drop-shadow-[0_4px_18px_rgba(15,23,42,0.9)]">
+                    <span className="block">გაცვალე ნივთები</span>
+                    <span className="mt-1 block text-[#FF5500]">მარტივად</span>
+                  </h1>
+                  <p className="mt-4 max-w-xl mx-auto text-xs sm:text-sm text-slate-200 font-medium leading-relaxed">
+                    იპოვე სასურველი ნივთი, მიიტანე swap შეთავაზება და გაცვალე უსაფრთხოდ ჩვენი community-თან.
+                  </p>
                 </div>
-              </div>
 
-              <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
-                <button
-                  onClick={() => handleProtectedNavigation("listing")}
-                  className="w-full sm:w-auto min-h-11 bg-[#FF5500] hover:bg-[#e04b00] active:scale-95 text-white font-bold px-6 py-3 rounded-md text-xs transition shadow-lg shadow-[#FF5500]/30 inline-flex items-center justify-center gap-2"
-                >
-                  <span>დაამატე განცხადება</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setActiveTab("home")}
-                  className="w-full sm:w-auto min-h-11 border border-white/20 bg-white/5 text-white hover:bg-white/10 backdrop-blur-md font-bold px-6 py-3 rounded-md text-xs transition"
-                >
-                  იპოვე ნივთი
-                </button>
+                <div className="mx-auto mt-8 max-w-3xl">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-center">
+                    <div
+                      className={`flex-1 backdrop-blur-md border rounded-md flex items-center px-3.5 py-2.5 text-xs transition shadow-lg ${
+                        isDarkMode
+                          ? "bg-slate-900/80 border-slate-700/80 focus-within:border-[#FF5500]"
+                          : "bg-white/90 border-slate-300 focus-within:border-[#FF5500]"
+                      }`}
+                    >
+                      <Search className="w-4 h-4 text-[#FF5500] mr-2 shrink-0" />
+                      <input
+                        type="text"
+                        placeholder={
+                          lang === "GE"
+                            ? "რა ნივთის გაცვლა გსურს?"
+                            : "Search items or services..."
+                        }
+                        className={`min-h-10 bg-transparent border-none focus:outline-none w-full font-medium ${
+                          isDarkMode
+                            ? "text-white placeholder-slate-400"
+                            : "text-slate-900 placeholder-slate-500"
+                        }`}
+                      />
+                    </div>
+
+                    <button
+                      className={`min-h-11 min-w-11 backdrop-blur-md border p-2.5 rounded-md transition flex items-center justify-center ${
+                        isDarkMode
+                          ? "bg-slate-900/80 border-slate-700/80 text-slate-300 hover:text-[#FF5500]"
+                          : "bg-white/90 border-slate-300 text-slate-700 hover:text-[#FF5500]"
+                      }`}
+                    >
+                      <SlidersHorizontal className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="mt-3 flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <button
+                      onClick={() => handleProtectedNavigation("listing")}
+                      className="w-full sm:w-auto min-h-11 bg-[#FF5500] hover:bg-[#e04b00] active:scale-95 text-white font-bold px-6 py-3 rounded-md text-xs transition shadow-lg shadow-[#FF5500]/30 inline-flex items-center justify-center gap-2"
+                    >
+                      <span>დაამატე განცხადება</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("home")}
+                      className="w-full sm:w-auto min-h-11 border border-white/20 bg-white/5 text-white hover:bg-white/10 backdrop-blur-md font-bold px-6 py-3 rounded-md text-xs transition"
+                    >
+                      იპოვე ნივთი
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
