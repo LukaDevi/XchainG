@@ -106,6 +106,8 @@ export default function App() {
   const [profileTab, setProfileTab] = useState("listings");
   const [profileForm, setProfileForm] = useState({ full_name: "", phone: "", bio: "" });
   const [profileListings, setProfileListings] = useState([]);
+  const [homepageItems, setHomepageItems] = useState([]);
+  const [selectedHomeCategory, setSelectedHomeCategory] = useState("all");
   const [profileHistory] = useState([]);
   const [savedListings] = useState([]);
   const [matches, setMatches] = useState([]);
@@ -214,6 +216,27 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!supabase) return undefined;
+
+    const loadHomepageItems = async () => {
+      const { data, error } = await supabase
+        .from("items")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Failed to load homepage items:", error);
+        return;
+      }
+
+      setHomepageItems(data || []);
+    };
+
+    loadHomepageItems();
+    return undefined;
+  }, []);
+
+  useEffect(() => {
     if (!supabase || !currentUser?.id) return undefined;
 
     let channel;
@@ -234,6 +257,7 @@ export default function App() {
       }
 
       const normalizedItems = allItems || [];
+      setHomepageItems(normalizedItems);
       setProfileListings(normalizedItems.filter((item) => (item.user_id || item.owner_id) === currentUser.id).map((item) => ({
         ...item,
         title: item.title || item.name,
@@ -349,6 +373,23 @@ export default function App() {
     { name: lang === "GE" ? "სპორტი" : "Sports", icon: Dumbbell },
     { name: lang === "GE" ? "სხვა" : "Other", icon: Package },
   ];
+
+  const homeCategories = [
+    { id: "phones", label: "ტელეფონები", icon: Smartphone, matches: ["phone", "phones", "ტელეფონი", "ტელეფონები", "mobile"] },
+    { id: "laptops", label: "ლეპტოპები", icon: Package, matches: ["laptop", "laptops", "ლეპტოპი", "ლეპტოპები", "computer"] },
+    { id: "televisions", label: "ტელევიზორები", icon: HomeIcon, matches: ["tv", "television", "televisions", "ტელევიზორი", "ტელევიზორები"] },
+    { id: "accessories", label: "აქსესუარები", icon: Smartphone, matches: ["accessory", "accessories", "აქსესუარი", "აქსესუარები"] },
+    { id: "audio", label: "აუდიო ტექნიკა", icon: MessageSquare, matches: ["audio", "აუდიო", "headphones", "ყურსასმენი"] },
+    { id: "all", label: "ყველა", icon: Package, matches: [] },
+  ];
+
+  const filteredHomepageItems = homepageItems.filter((item) => {
+    if (selectedHomeCategory === "all") return true;
+
+    const category = homeCategories.find((entry) => entry.id === selectedHomeCategory);
+    const itemCategory = String(item.category || "").toLowerCase();
+    return category?.matches.some((match) => itemCategory.includes(match));
+  });
 
   // Handlers
   const handleProtectedNavigation = (target) => {
@@ -911,6 +952,113 @@ export default function App() {
                 </div>
               </div>
             </div>
+
+            <section className="mx-auto grid max-w-7xl grid-cols-1 gap-8 px-4 py-10 sm:px-6 lg:grid-cols-12 lg:gap-10 lg:px-8">
+              <div className="lg:col-span-8">
+                <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#FF5500]">XchainG marketplace</p>
+                    <h2 className="mt-1 text-xl font-black tracking-tight sm:text-2xl">ტექნიკა გაცვლისთვის</h2>
+                  </div>
+                  <span className="text-xs text-slate-400">{filteredHomepageItems.length} განცხადება</span>
+                </div>
+
+                <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
+                  {homeCategories.map((category) => {
+                    const CategoryIcon = category.icon;
+                    const isActive = selectedHomeCategory === category.id;
+                    return (
+                      <button
+                        key={category.id}
+                        type="button"
+                        onClick={() => setSelectedHomeCategory(category.id)}
+                        className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md border px-3 py-2 text-xs font-bold transition ${
+                          isActive
+                            ? "border-[#FF5500] bg-[#FF5500] text-white shadow-md shadow-[#FF5500]/20"
+                            : isDarkMode
+                              ? "border-slate-800 bg-slate-900/60 text-slate-300 hover:border-[#FF5500]/50 hover:text-[#FF5500]"
+                              : "border-slate-200 bg-white text-slate-700 hover:border-[#FF5500]/50 hover:text-[#FF5500]"
+                        }`}
+                      >
+                        <CategoryIcon className="h-4 w-4" />
+                        {category.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {filteredHomepageItems.length === 0 ? (
+                  <div className={`flex min-h-64 flex-col items-center justify-center rounded-lg border px-6 py-10 text-center ${isDarkMode ? "border-slate-800 bg-slate-900/50" : "border-slate-200 bg-white"}`}>
+                    <Package className="h-9 w-9 text-[#FF5500]" />
+                    <h3 className="mt-4 text-sm font-black">ამ კატეგორიაში ნივთები ჯერ არ არის ატვირთული</h3>
+                    <p className="mt-2 max-w-sm text-xs leading-relaxed text-slate-400">იყავი პირველი და დაამატე ნივთი, რომლის გაცვლაც გსურს.</p>
+                    <button
+                      type="button"
+                      onClick={() => handleProtectedNavigation("listing")}
+                      className="mt-5 inline-flex min-h-10 items-center gap-2 rounded-md bg-[#FF5500] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#e04b00]"
+                    >
+                      <Plus className="h-4 w-4" />
+                      იყავი პირველი — დაამატე შენი ნივთი
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {filteredHomepageItems.map((item) => {
+                      const itemImage = item.image_url || item.image || "";
+                      return (
+                        <article key={item.id} className={`overflow-hidden rounded-lg border transition hover:border-[#FF5500]/50 ${isDarkMode ? "border-slate-800 bg-slate-900/70" : "border-slate-200 bg-white"}`}>
+                          <div className="aspect-[16/10] bg-slate-800/60">
+                            {itemImage ? (
+                              <img src={itemImage} alt={item.title || item.name || "ნივთი"} className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="flex h-full items-center justify-center text-slate-500"><Package className="h-8 w-8" /></div>
+                            )}
+                          </div>
+                          <div className="p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <h3 className="line-clamp-2 text-sm font-black">{item.title || item.name || "უსათაურო ნივთი"}</h3>
+                              <span className="shrink-0 rounded-full bg-[#FF5500]/10 px-2 py-1 text-[10px] font-bold text-[#FF5500]">{item.category || "ტექნიკა"}</span>
+                            </div>
+                            <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-400">სასურველი გაცვლა: {item.desired_trade || item.desiredTrade || "შეთავაზება"}</p>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <aside className={`self-start rounded-lg border p-5 lg:col-span-4 lg:sticky lg:top-24 ${isDarkMode ? "border-slate-800 bg-slate-900/70" : "border-slate-200 bg-white"}`}>
+                <div className="mb-6">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#FF5500]">User flow</p>
+                  <h2 className="mt-1 text-xl font-black tracking-tight">როგორ მუშაობს XchainG</h2>
+                  <p className="mt-2 text-xs leading-relaxed text-slate-400">ოთხი მარტივი ნაბიჯი ნივთების უსაფრთხოდ გასაცვლელად.</p>
+                </div>
+
+                <div className="space-y-5">
+                  {[
+                    { icon: User, title: "რეგისტრაცია / ავტორიზაცია", text: "შექმენი პროფილი უსაფრთხოდ." },
+                    { icon: Plus, title: "ნივთის ატვირთვა", text: "დაამატე შენი ტექნიკა დასათრეიდებლად." },
+                    { icon: Search, title: "მატჩის პოვნა", text: "იპოვე სასურველი ნივთი და გააგზავნე გაცვლის შეთავაზება." },
+                    { icon: MessageSquare, title: "P2P ჩატი & გარიგება", text: "შეათანხმე გაცვლის დეტალები პირდაპირ ჩატში." },
+                  ].map((step, index) => {
+                    const StepIcon = step.icon;
+                    return (
+                      <div key={step.title} className="relative flex gap-3">
+                        {index < 3 && <div className="absolute left-4 top-9 h-8 w-px bg-slate-800" />}
+                        <div className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#FF5500]/10 text-[#FF5500]">
+                          <StepIcon className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="text-xs font-black">{step.title}</h3>
+                          <p className="mt-1 text-xs leading-relaxed text-slate-400">{step.text}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </aside>
+            </section>
           </div>
         )}
 
