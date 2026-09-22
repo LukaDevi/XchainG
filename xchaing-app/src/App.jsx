@@ -807,28 +807,17 @@ export default function App() {
             )}
             <div className="absolute inset-0 z-0 h-[480px]">
               <img
-                src="https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?q=80&w=2070&auto=format&fit=crop"
-                alt="Hero Background"
+                src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1920&auto=format&fit=crop"
+                alt="Modern tech-inspired barter background"
                 className="w-full h-full object-cover object-center"
               />
-              <div
-                className={`absolute inset-0 transition-colors duration-300 ${
-                  isDarkMode
-                    ? "bg-gradient-to-b from-slate-950/80 via-slate-950/85 to-slate-950"
-                    : "bg-gradient-to-b from-slate-900/60 via-slate-900/40 to-slate-50"
-                }`}
-              ></div>
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,85,0,0.22),_transparent_30%),linear-gradient(to_bottom,rgba(2,6,23,0.82),rgba(2,6,23,0.9),rgba(2,6,23,0.96))]" />
             </div>
 
             <div className="relative z-10 max-w-xl mx-auto px-2.5 min-[360px]:px-3 sm:px-4 pt-10 sm:pt-12 pb-16 text-center space-y-6">
-              <div className="inline-flex items-center gap-1.5 bg-black/40 border border-[#FF5500]/40 backdrop-blur-md px-3 py-1 rounded-md text-[11px] font-bold text-[#FF5500]">
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>AI P2P Barter Platform</span>
-              </div>
-
               <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight leading-tight">
-                გაეცვალე ნივთები <br />
-                <span className="text-[#FF5500]">AI შეფასებით</span>
+                <span className="block">გაცვალე ნივთები</span>
+                <span className="mt-1 block text-[#FF5500]">მარტივად და სამართლიანად</span>
               </h1>
 
               <p className="text-xs sm:text-sm text-slate-200 max-w-md mx-auto font-medium leading-relaxed">
