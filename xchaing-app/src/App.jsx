@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import LandingHeader from "./components/LandingHeader";
 import PricingModal from "./components/PricingModal";
+import { useSubscription } from "./hooks/useSubscription";
 import { supabase, supabaseConfigurationError } from "./lib/supabase";
 import {
   Menu,
@@ -60,6 +61,7 @@ export default function App() {
 
   // Auth State
   const [currentUser, setCurrentUser] = useState(null);
+  const { plan: subscriptionPlan, loading: subscriptionLoading } = useSubscription(currentUser?.id);
   const [profileAvatar, setProfileAvatar] = useState("");
   const [profileUsername, setProfileUsername] = useState("");
   const [profileSaveStatus, setProfileSaveStatus] = useState("");
@@ -119,6 +121,13 @@ export default function App() {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isProfileLoading, setIsProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState("");
+
+  useEffect(() => {
+    if (isModalOpen && currentUser && !subscriptionLoading && subscriptionPlan === "free") {
+      setIsModalOpen(false);
+      setIsPricingOpen(true);
+    }
+  }, [currentUser, isModalOpen, subscriptionLoading, subscriptionPlan]);
 
   const syncProfileFromUser = async (user) => {
     if (!supabase || !user?.id) {
@@ -396,7 +405,18 @@ export default function App() {
   // Handlers
   const handleProtectedNavigation = (target) => {
     if (currentUser) {
-      if (target === "listing") setIsModalOpen(true);
+      if (target === "listing") {
+        if (!subscriptionLoading && subscriptionPlan === "free") {
+          alert("განცხადების დასამატებლად აირჩიე ფასიანი ტარიფი.");
+          setIsPricingOpen(true);
+          return;
+        }
+        setIsModalOpen(true);
+      }
+      else if (target === "matches" && !subscriptionLoading && subscriptionPlan !== "pro") {
+        alert("AI სერვისებისა და მეჩინგებისთვის საჭიროა Pro ტარიფი.");
+        setIsPricingOpen(true);
+      }
       else setActiveTab(target);
       return;
     }
@@ -406,8 +426,21 @@ export default function App() {
   };
 
   const completePendingAuthAction = () => {
-    if (pendingAuthAction === "listing") setIsModalOpen(true);
-    else if (pendingAuthAction) setActiveTab(pendingAuthAction);
+    if (pendingAuthAction === "listing") {
+      if (!subscriptionLoading && subscriptionPlan === "free") {
+        alert("განცხადების დასამატებლად აირჩიე ფასიანი ტარიფი.");
+        setIsPricingOpen(true);
+      } else {
+        setIsModalOpen(true);
+      }
+    } else if (pendingAuthAction === "matches") {
+      if (!subscriptionLoading && subscriptionPlan !== "pro") {
+        alert("AI სერვისებისა და მეჩინგებისთვის საჭიროა Pro ტარიფი.");
+        setIsPricingOpen(true);
+      } else {
+        setActiveTab("matches");
+      }
+    } else if (pendingAuthAction) setActiveTab(pendingAuthAction);
     setPendingAuthAction(null);
   };
 
@@ -464,12 +497,22 @@ export default function App() {
   };
 
   const handleMatchAction = (id, newStatus) => {
+    if (subscriptionPlan !== "pro") {
+      alert("AI სერვისებისა და მეჩინგებისთვის საჭიროა Pro ტარიფი.");
+      setIsPricingOpen(true);
+      return;
+    }
     setMatches(
       matches.map((m) => (m.id === id ? { ...m, status: newStatus } : m)),
     );
   };
 
   const handleCancelSentOffer = (id) => {
+    if (subscriptionPlan !== "pro") {
+      alert("AI სერვისებისა და მეჩინგებისთვის საჭიროა Pro ტარიფი.");
+      setIsPricingOpen(true);
+      return;
+    }
     setSentMatches(sentMatches.filter((match) => match.id !== id));
   };
 
@@ -711,6 +754,13 @@ export default function App() {
 
   const handleAddListing = async (e) => {
     e.preventDefault();
+
+    if (subscriptionPlan === "free") {
+      alert("განცხადების დასამატებლად აირჩიე ფასიანი ტარიფი.");
+      setIsPricingOpen(true);
+      handleCloseListingModal();
+      return;
+    }
 
     if (!capturedPhoto?.blob) {
       alert("განცხადების დასამატებლად გადაიღე ნივთის ფოტო კამერით.");
@@ -1101,6 +1151,18 @@ export default function App() {
                 <p className="text-xs text-slate-400">
                   შენი შეთავაზებები და AI შეფასებები
                 </p>
+                {subscriptionPlan === "basic" && (
+                  <div className="mt-3 rounded-md border border-[#FF5500]/30 bg-[#FF5500]/10 px-3 py-2 text-xs text-[#FF5500]">
+                    მეჩინგი და AI ასისტენტი ხელმისაწვდომია მხოლოდ Pro ტარიფზე.
+                    <button
+                      type="button"
+                      onClick={() => setIsPricingOpen(true)}
+                      className="ml-1 font-bold underline underline-offset-2"
+                    >
+                      განაახლე ტარიფი
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -2232,11 +2294,11 @@ export default function App() {
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-[#FF5500]" />
                   <span className="font-medium">
-                    გამოქვეყნება + AI შეფასება:
+                    {subscriptionPlan === "pro" ? "გამოქვეყნება + AI შეფასება:" : "განცხადების გამოქვეყნება:"}
                   </span>
                 </div>
                 <span className="font-black text-[#FF5500] text-sm">
-                  1.00 ₾
+                  {subscriptionPlan === "pro" ? "1.00 ₾" : "Basic"}
                 </span>
               </div>
 
@@ -2244,8 +2306,8 @@ export default function App() {
                 type="submit"
                 className="w-full min-h-11 bg-[#FF5500] hover:bg-[#e04b00] active:scale-98 text-white font-bold py-3 rounded-lg text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-[#FF5500]/25"
               >
-                <Sparkles className="w-4 h-4" />
-                <span>გამოქვეყნება (1.00 ₾)</span>
+                {subscriptionPlan === "pro" && <Sparkles className="w-4 h-4" />}
+                <span>{subscriptionPlan === "pro" ? "გამოქვეყნება (1.00 ₾)" : "განცხადების გამოქვეყნება"}</span>
               </button>
             </form>
           </div>
