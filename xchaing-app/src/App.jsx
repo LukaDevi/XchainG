@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import LandingHeader from "./components/LandingHeader";
 import { supabase, supabaseConfigurationError } from "./lib/supabase";
 import {
   Menu,
@@ -720,100 +721,21 @@ export default function App() {
           : "bg-slate-50 text-slate-900"
       }`}
     >
-      {/* 1. FIXED & TRANSPARENT HEADER */}
-      <header
-        className={`fixed top-0 left-0 right-0 z-50 px-2.5 min-[360px]:px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-1 min-[360px]:gap-2 transition-all duration-300 bg-slate-950/40 backdrop-blur-xl border-b shadow-lg ${
-          isDarkMode
-            ? "border-white/10 shadow-black/20"
-            : "bg-white/40 border-black/5 shadow-slate-200/50"
-        }`}
-      >
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsSidebarOpen(true)}
-            className={`min-h-10 min-w-10 shrink-0 p-2 rounded-md transition flex items-center justify-center ${
-              isDarkMode
-                ? "hover:bg-white/10 text-slate-200"
-                : "hover:bg-slate-200/60 text-slate-700"
-            } hover:text-[#FF5500]`}
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-
-          <div
-            onClick={() => setActiveTab("home")}
-            className="text-lg sm:text-xl font-black tracking-tight flex items-center cursor-pointer shrink-0"
-          >
-            <span className="text-[#FF5500] font-extrabold text-2xl">X</span>
-            <span
-              className={`font-medium text-sm ${isDarkMode ? "text-slate-300" : "text-slate-600"}`}
-            >
-              chain
-            </span>
-            <span className="text-[#FF5500] font-extrabold text-2xl">G</span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1 min-[360px]:gap-2 shrink-0">
-          <button
-            onClick={() => setIsDarkMode(!isDarkMode)}
-            className={`min-h-10 min-w-10 shrink-0 p-2 rounded-md transition flex items-center justify-center ${
-              isDarkMode
-                ? "bg-slate-900/80 text-amber-400 hover:bg-slate-800 border border-slate-800"
-                : "bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 shadow-sm"
-            }`}
-          >
-            {isDarkMode ? (
-              <Sun className="w-4 h-4" />
-            ) : (
-              <Moon className="w-4 h-4" />
-            )}
-          </button>
-
-          {currentUser ? (
-            <div className="flex items-center gap-2">
-              <div
-                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md border text-xs font-bold max-w-[120px] sm:max-w-none ${
-                  isDarkMode
-                    ? "bg-slate-900 border-slate-800 text-slate-200"
-                    : "bg-white border-slate-200 text-slate-800"
-                }`}
-              >
-                <div className="w-5 h-5 rounded-full bg-[#FF5500]/20 text-[#FF5500] flex items-center justify-center">
-                  <User className="w-3.5 h-3.5" />
-                </div>
-                <span className="truncate max-w-[72px] sm:max-w-[90px] max-[359px]:hidden">
-                  {currentUser.name}
-                </span>
-              </div>
-
-              <button
-                onClick={handleLogout}
-                title="გამოსვლა"
-                className={`min-h-10 min-w-10 p-1.5 rounded-md transition text-slate-400 hover:text-red-500 border flex items-center justify-center ${
-                  isDarkMode
-                    ? "bg-slate-900 border-slate-800 hover:bg-slate-800"
-                    : "bg-white border-slate-200 hover:bg-slate-100"
-                }`}
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setIsAuthModalOpen(true)}
-              className={`min-h-10 min-w-10 px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-bold transition flex items-center justify-center gap-1.5 border whitespace-nowrap ${
-                isDarkMode
-                  ? "bg-slate-900/80 text-slate-200 hover:bg-slate-800 border-slate-800 hover:text-[#FF5500]"
-                  : "bg-white text-slate-700 hover:bg-slate-100 border-slate-200 shadow-sm hover:text-[#FF5500]"
-              }`}
-            >
-              <User className="w-3.5 h-3.5" />
-              <span className="max-[359px]:hidden">{lang === "GE" ? "შესვლა" : "Sign In"}</span>
-            </button>
-          )}
-        </div>
-      </header>
+      <LandingHeader
+        isDarkMode={isDarkMode}
+        onToggleTheme={() => setIsDarkMode(!isDarkMode)}
+        currentUser={currentUser}
+        onOpenAuth={() => setIsAuthModalOpen(true)}
+        onLogout={handleLogout}
+        onOpenSidebar={() => setIsSidebarOpen(true)}
+        onNavigateHome={() => setActiveTab("home")}
+        navItems={[
+          { label: "Home", onClick: () => setActiveTab("home") },
+          { label: "Items", onClick: () => handleProtectedNavigation("listing") },
+          { label: "How it Works", onClick: () => setActiveTab("home") },
+          { label: "Login", onClick: () => setIsAuthModalOpen(true) },
+        ]}
+      />
 
       {/* 2. SIDEBAR */}
       <div
