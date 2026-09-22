@@ -919,18 +919,20 @@ export default function App() {
               </div>
             )}
             <div className="absolute inset-0 z-0 h-[480px]">
-              <img
-                src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1920&auto=format&fit=crop"
-                alt="Modern tech-inspired barter background"
-                className="w-full h-full object-cover object-center"
+              <div
+                className="absolute inset-0 w-full h-full bg-cover bg-center"
+                style={{
+                  background: "linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.95) 100%), url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1920&auto=format&fit=crop')",
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                }}
               />
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,85,0,0.22),_transparent_30%),linear-gradient(to_bottom,rgba(2,6,23,0.82),rgba(2,6,23,0.9),rgba(2,6,23,0.96))]" />
+              <div className="absolute inset-0 bg-slate-950/30" />
             </div>
 
             <div className="relative z-10 max-w-xl mx-auto px-2.5 min-[360px]:px-3 sm:px-4 pt-10 sm:pt-12 pb-16 text-center space-y-6">
-              <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight leading-tight">
-                <span className="block">გაცვალე ნივთები</span>
-                <span className="mt-1 block text-[#FF5500]">მარტივად და სამართლიანად</span>
+              <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight leading-tight drop-shadow-[0_2px_10px_rgba(15,23,42,0.8)]">
+                <span className="block">გაცვალე ნივთები მარტივად</span>
               </h1>
 
               <p className="text-xs sm:text-sm text-slate-200 max-w-md mx-auto font-medium leading-relaxed">
