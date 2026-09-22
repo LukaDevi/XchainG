@@ -754,6 +754,10 @@ export default function App() {
     return true;
   });
 
+  const scrollToSection = (sectionId) => {
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   return (
     <div
       className={`min-h-screen font-sans relative overflow-x-hidden pb-[calc(5rem+env(safe-area-inset-bottom))] transition-colors duration-300 ${
@@ -771,9 +775,9 @@ export default function App() {
         onOpenSidebar={() => setIsSidebarOpen(true)}
         onNavigateHome={() => setActiveTab("home")}
         navItems={[
-          { label: "Home", onClick: () => setActiveTab("home") },
-          { label: "Items", onClick: () => handleProtectedNavigation("listing") },
-          { label: "How it Works", onClick: () => setActiveTab("home") },
+          { label: "Home", onClick: () => { setActiveTab("home"); window.scrollTo({ top: 0, behavior: "smooth" }); } },
+          { label: "Items", onClick: () => { setActiveTab("home"); scrollToSection("categories-section"); } },
+          { label: "How it Works", onClick: () => { setActiveTab("home"); scrollToSection("user-flow-section"); } },
         ]}
       />
 
@@ -910,6 +914,9 @@ export default function App() {
                       <Search className="w-4 h-4 text-[#FF5500] mr-2 shrink-0" />
                       <input
                         type="text"
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") scrollToSection("categories-section");
+                        }}
                         placeholder={
                           lang === "GE"
                             ? "რა ნივთის გაცვლა გსურს?"
@@ -924,6 +931,8 @@ export default function App() {
                     </div>
 
                     <button
+                      type="button"
+                      onClick={() => scrollToSection("categories-section")}
                       className={`min-h-11 min-w-11 backdrop-blur-md border p-2.5 rounded-md transition flex items-center justify-center ${
                         isDarkMode
                           ? "bg-slate-900/80 border-slate-700/80 text-slate-300 hover:text-[#FF5500]"
@@ -943,7 +952,8 @@ export default function App() {
                       <ArrowRight className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => setActiveTab("home")}
+                      type="button"
+                      onClick={() => scrollToSection("categories-section")}
                       className="w-full sm:w-auto min-h-11 border border-white/20 bg-white/5 text-white hover:bg-white/10 backdrop-blur-md font-bold px-6 py-3 rounded-md text-xs transition"
                     >
                       იპოვე ნივთი
@@ -953,7 +963,7 @@ export default function App() {
               </div>
             </div>
 
-            <section className="mx-auto grid max-w-7xl grid-cols-1 gap-8 px-4 py-10 sm:px-6 lg:grid-cols-12 lg:gap-10 lg:px-8">
+            <section id="categories-section" className="scroll-mt-24 mx-auto grid max-w-7xl grid-cols-1 gap-8 px-4 py-10 sm:px-6 lg:grid-cols-12 lg:gap-10 lg:px-8">
               <div className="lg:col-span-8">
                 <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                   <div>
@@ -963,31 +973,34 @@ export default function App() {
                   <span className="text-xs text-slate-400">{filteredHomepageItems.length} განცხადება</span>
                 </div>
 
-                <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
-                  {homeCategories.map((category) => {
-                    const CategoryIcon = category.icon;
-                    const isActive = selectedHomeCategory === category.id;
-                    return (
-                      <button
-                        key={category.id}
-                        type="button"
-                        onClick={() => setSelectedHomeCategory(category.id)}
-                        className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md border px-3 py-2 text-xs font-bold transition ${
-                          isActive
-                            ? "border-[#FF5500] bg-[#FF5500] text-white shadow-md shadow-[#FF5500]/20"
-                            : isDarkMode
-                              ? "border-slate-800 bg-slate-900/60 text-slate-300 hover:border-[#FF5500]/50 hover:text-[#FF5500]"
-                              : "border-slate-200 bg-white text-slate-700 hover:border-[#FF5500]/50 hover:text-[#FF5500]"
-                        }`}
-                      >
-                        <CategoryIcon className="h-4 w-4" />
-                        {category.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-[13rem_minmax(0,1fr)] md:items-start">
+                  <nav className={`rounded-lg border p-2 ${isDarkMode ? "border-slate-800 bg-slate-900/60" : "border-slate-200 bg-white"}`} aria-label="ტექნიკის კატეგორიები">
+                    <p className="px-3 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">კატეგორიები</p>
+                    <div className="space-y-1">
+                      {homeCategories.map((category) => {
+                        const CategoryIcon = category.icon;
+                        const isActive = selectedHomeCategory === category.id;
+                        return (
+                          <button
+                            key={category.id}
+                            type="button"
+                            onClick={() => setSelectedHomeCategory(category.id)}
+                            className={`flex min-h-10 w-full items-center gap-2 rounded-r-md border-l-4 px-3 py-2 text-left text-xs font-bold transition ${
+                              isActive
+                                ? "border-l-[#FF5500] bg-orange-500/10 text-orange-500"
+                                : "border-l-transparent text-slate-400 hover:border-l-orange-500/50 hover:bg-orange-500/5 hover:text-orange-500"
+                            }`}
+                          >
+                            <CategoryIcon className="h-4 w-4 shrink-0" />
+                            <span>{category.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </nav>
 
-                {filteredHomepageItems.length === 0 ? (
+                  <div className="min-w-0">
+                    {filteredHomepageItems.length === 0 ? (
                   <div className={`flex min-h-64 flex-col items-center justify-center rounded-lg border px-6 py-10 text-center ${isDarkMode ? "border-slate-800 bg-slate-900/50" : "border-slate-200 bg-white"}`}>
                     <Package className="h-9 w-9 text-[#FF5500]" />
                     <h3 className="mt-4 text-sm font-black">ამ კატეგორიაში ნივთები ჯერ არ არის ატვირთული</h3>
@@ -1001,7 +1014,7 @@ export default function App() {
                       იყავი პირველი — დაამატე შენი ნივთი
                     </button>
                   </div>
-                ) : (
+                    ) : (
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     {filteredHomepageItems.map((item) => {
                       const itemImage = item.image_url || item.image || "";
@@ -1025,10 +1038,12 @@ export default function App() {
                       );
                     })}
                   </div>
-                )}
+                    )}
+                  </div>
+                </div>
               </div>
 
-              <aside className={`self-start rounded-lg border p-5 lg:col-span-4 lg:sticky lg:top-24 ${isDarkMode ? "border-slate-800 bg-slate-900/70" : "border-slate-200 bg-white"}`}>
+              <aside id="user-flow-section" className={`scroll-mt-24 self-start rounded-lg border p-5 lg:col-span-4 lg:sticky lg:top-24 ${isDarkMode ? "border-slate-800 bg-slate-900/70" : "border-slate-200 bg-white"}`}>
                 <div className="mb-6">
                   <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#FF5500]">User flow</p>
                   <h2 className="mt-1 text-xl font-black tracking-tight">როგორ მუშაობს XchainG</h2>
