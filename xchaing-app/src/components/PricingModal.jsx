@@ -1,4 +1,6 @@
-import { Check, Crown, Sparkles, X, Zap } from "lucide-react";
+import { useState } from "react";
+import { Check, Crown, LoaderCircle, Sparkles, X, Zap } from "lucide-react";
+import { supabase } from "../lib/supabase";
 
 const plans = [
   {
@@ -31,10 +33,48 @@ const plans = [
 ];
 
 export default function PricingModal({ isOpen = true, onClose, onSelectPlan }) {
+  const [loadingPlan, setLoadingPlan] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
+
   if (!isOpen) return null;
 
-  const handleSelectPlan = (plan) => {
-    onSelectPlan?.(plan.id);
+  const handleSelectPlan = async (plan) => {
+    if (!supabase) {
+      setErrorMessage("Supabase არ არის კონფიგურირებული.");
+      return;
+    }
+
+    setLoadingPlan(plan.id);
+    setErrorMessage("");
+
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      if (!userData.user) throw new Error("ტარიფის ასარჩევად ავტორიზაცია გაიარე.");
+
+      const { error: subscriptionError } = await supabase
+        .from("subscriptions")
+        .upsert(
+          {
+            user_id: userData.user.id,
+            plan_type: plan.id,
+            status: "active",
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id" },
+        );
+
+      if (subscriptionError) throw subscriptionError;
+
+      onSelectPlan?.(plan.id);
+      alert("ტარიფი წარმატებით შეიცვალა!");
+      onClose?.();
+    } catch (error) {
+      console.error("Error updating subscription:", error);
+      setErrorMessage(error.message || "ტარიფის შეცვლა ვერ მოხერხდა.");
+    } finally {
+      setLoadingPlan(null);
+    }
   };
 
   return (
@@ -66,6 +106,12 @@ export default function PricingModal({ isOpen = true, onClose, onSelectPlan }) {
             აირჩიე გეგმა, რომელიც შენს გაცვლის სტილს შეესაბამება.
           </p>
         </div>
+
+        {errorMessage && (
+          <div className="mx-auto mt-5 max-w-xl rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-center text-xs text-red-300">
+            {errorMessage}
+          </div>
+        )}
 
         <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3">
           {plans.map((plan) => {
@@ -107,14 +153,16 @@ export default function PricingModal({ isOpen = true, onClose, onSelectPlan }) {
 
                 <button
                   type="button"
+                  disabled={loadingPlan !== null}
                   onClick={() => handleSelectPlan(plan)}
-                  className={`mt-6 inline-flex min-h-11 items-center justify-center rounded-md px-4 py-2 text-xs font-bold transition ${
+                  className={`mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
                     plan.featured
                       ? "bg-[#FF5500] text-white shadow-lg shadow-[#FF5500]/20 hover:bg-[#e04b00]"
                       : "border border-[#FF5500]/50 bg-[#FF5500]/5 text-[#FF5500] hover:bg-[#FF5500] hover:text-white"
                   }`}
                 >
-                  არჩევა
+                  {loadingPlan === plan.id && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                  {loadingPlan === plan.id ? "იტვირთება..." : "არჩევა"}
                 </button>
               </article>
             );
