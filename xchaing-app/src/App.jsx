@@ -922,12 +922,11 @@ export default function App() {
               <div
                 className="absolute inset-0 w-full h-full bg-cover bg-center"
                 style={{
-                  background: "linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.95) 100%), url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1920&auto=format&fit=crop')",
+                  background: "linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(15, 23, 42, 0.88) 100%), url('https://images.unsplash.com/photo-1556742049-0a67f2d45618?q=80&w=1920&auto=format&fit=crop')",
                   backgroundSize: "cover",
                   backgroundPosition: "center",
                 }}
               />
-              <div className="absolute inset-0 bg-slate-950/30" />
             </div>
 
             <div className="relative z-10 max-w-xl mx-auto px-2.5 min-[360px]:px-3 sm:px-4 pt-10 sm:pt-12 pb-16 text-center space-y-6">
@@ -936,8 +935,7 @@ export default function App() {
               </h1>
 
               <p className="text-xs sm:text-sm text-slate-200 max-w-md mx-auto font-medium leading-relaxed">
-                უსაფრთხო და პირდაპირი ბარტერი. ხელოვნური ინტელექტი ავტომატურად
-                განსაზღვრავს რეალურ საბაზრო ღირებულებას.
+                უსაფრთხო და პირდაპირი ბარტერი სხვადასხვა ნივთებს შორის.
               </p>
 
               <div className="pt-2 max-w-md mx-auto">
