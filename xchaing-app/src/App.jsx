@@ -402,15 +402,23 @@ export default function App() {
     event.preventDefault();
     setProfileSaveStatus("ინახება...");
 
+    const savedProfile = {
+      name: profileForm.name.trim(),
+      phone: profileForm.phone.trim(),
+      location: profileForm.location.trim(),
+      bio: profileForm.bio.trim(),
+    };
+    const savedUsername = profileUsername.trim();
+
     if (supabase && currentUser?.id) {
       const { error } = await supabase.from("profiles").upsert(
         {
           id: currentUser.id,
-          full_name: profileForm.name,
-          username: profileUsername,
-          phone: profileForm.phone,
-          location: profileForm.location,
-          bio: profileForm.bio,
+          full_name: savedProfile.name,
+          username: savedUsername,
+          phone: savedProfile.phone,
+          location: savedProfile.location,
+          bio: savedProfile.bio,
           avatar_url: profileAvatar,
           updated_at: new Date().toISOString(),
         },
@@ -423,6 +431,8 @@ export default function App() {
       }
     }
 
+    setProfileForm(savedProfile);
+    setProfileUsername(savedUsername);
     setProfileSaveStatus("პროფილი შენახულია");
   };
 
@@ -532,7 +542,14 @@ export default function App() {
       if (previousPhoto?.previewUrl) URL.revokeObjectURL(previousPhoto.previewUrl);
       return null;
     });
-    setFormData((currentForm) => ({ ...currentForm, image: null }));
+    setFormData({
+      title: "",
+      category: "Electronics",
+      condition: "used",
+      desiredTrade: "",
+      image: null,
+      comment: "",
+    });
   };
 
   const handleAddListing = async (e) => {
@@ -572,14 +589,6 @@ export default function App() {
 
     alert("განცხადება წარმატებით დაემატა AI ანალიზისთვის! (საფასური: 1.00 ₾)");
     handleCloseListingModal();
-    setFormData({
-      title: "",
-      category: "Electronics",
-      condition: "used",
-      desiredTrade: "",
-      image: null,
-      comment: "",
-    });
   };
 
   const filteredMatches = matches.filter((m) => {
@@ -1346,7 +1355,7 @@ export default function App() {
                   </p>
                   <div className="flex flex-wrap justify-center sm:justify-start gap-3 mt-3 text-[10px] text-slate-400">
                     <span className="inline-flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-[#FF5500]" /> {profileForm.location}</span>
-                    <span className="inline-flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-[#FF5500]" /> დადასტურებული ტელეფონი</span>
+                    <span className="inline-flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-[#FF5500]" /> {profileForm.phone || "ტელეფონი მითითებული არ არის"}</span>
                   </div>
                 </div>
               </div>
@@ -1365,7 +1374,7 @@ export default function App() {
                 ["listings", "ჩემი განცხადებები"],
                 ["history", "ისტორია"],
                 ["saved", "შენახულები"],
-                ["settings", "პარამეტრები"],
+                ["settings", "ინფო"],
               ].map(([tab, label]) => (
                 <button
                   key={tab}
@@ -1427,7 +1436,7 @@ export default function App() {
 
             {profileTab === "settings" && (
               <form className={`rounded-xl border p-4 sm:p-5 space-y-4 ${isDarkMode ? "bg-slate-900/90 border-slate-800" : "bg-white border-slate-200"}`} onSubmit={(event) => event.preventDefault()}>
-                <div className="flex items-center gap-2"><Settings className="w-4 h-4 text-[#FF5500]" /><h2 className="text-sm font-bold">პროფილის პარამეტრები</h2></div>
+                <div className="flex items-center gap-2"><Settings className="w-4 h-4 text-[#FF5500]" /><h2 className="text-sm font-bold">პროფილის ინფო</h2></div>
                 {[["name", "სახელი და გვარი"], ["phone", "ტელეფონის ნომერი"], ["location", "მდებარეობა"]].map(([key, label]) => (
                   <label key={key} className="block text-[11px] font-bold text-slate-400">{label}<input value={profileForm[key]} onChange={(event) => setProfileForm({ ...profileForm, [key]: event.target.value })} className={`mt-1 w-full min-h-11 rounded-md border p-2.5 text-xs focus:outline-none focus:border-[#FF5500] focus:ring-2 focus:ring-[#FF5500]/30 ${isDarkMode ? "bg-slate-950 border-slate-800 text-white" : "bg-slate-50 border-slate-200 text-slate-900"}`} /></label>
                 ))}
