@@ -4,12 +4,12 @@ import { supabase, supabaseConfigurationError } from "../lib/supabase";
 
 export function UserAvatar({ src, name, className = "h-10 w-10" }) {
   const [imageFailed, setImageFailed] = useState(false);
-  const label = name?.trim() || "მომხმარებელი";
+  const label = name?.trim() || "User";
 
   if (!src || imageFailed) {
     return (
       <div className={`flex shrink-0 items-center justify-center rounded-full bg-[#FF5500]/10 font-bold text-[#FF5500] ${className}`} aria-label={label}>
-        {label !== "მომხმარებელი" ? label.charAt(0).toUpperCase() : <User className="h-1/2 w-1/2" />}
+        {label !== "User" ? label.charAt(0).toUpperCase() : <User className="h-1/2 w-1/2" />}
       </div>
     );
   }
@@ -136,7 +136,8 @@ export default function Chat({ swapId, currentUserId, otherUser, onBack, isDarkM
     || otherUser?.user_metadata?.name
     || otherUser?.email
     || otherUser?.name
-    || "მომხმარებელი";
+    || otherUser?.userId?.slice(0, 8)
+    || "User";
   const participantAvatar = participant?.avatar_url || otherUser?.avatar || otherUser?.user_metadata?.avatar_url;
 
   return (
