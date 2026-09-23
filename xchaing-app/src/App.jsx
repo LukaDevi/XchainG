@@ -256,6 +256,7 @@ export default function App() {
     if (!supabase || !currentUser?.id) return undefined;
 
     let channel;
+    let swapsChannel;
     const loadDatabaseState = async () => {
       const [{ data: profile }, { data: allItems }, { data: messages }] = await Promise.all([
         supabase.from("profiles").select("full_name, bio, phone, avatar_url").eq("id", currentUser.id).maybeSingle(),
@@ -299,6 +300,32 @@ export default function App() {
           requestedItem: itemsById[swap.requested_item_id],
         })));
       }
+
+      swapsChannel = supabase
+        .channel(`swap-requests:${currentUser.id}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "swaps" }, async (payload) => {
+          const changedSwap = payload.new || payload.old;
+          if (!changedSwap || (changedSwap.sender_id !== currentUser.id && changedSwap.receiver_id !== currentUser.id)) return;
+
+          const { data: latestSwaps, error: latestError } = await supabase
+            .from("swaps")
+            .select("*")
+            .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`)
+            .order("created_at", { ascending: false });
+
+          if (latestError) {
+            console.error("Failed to refresh swap requests:", latestError);
+            return;
+          }
+
+          const itemsById = Object.fromEntries(normalizedItems.map((item) => [item.id, item]));
+          setSwapRequests((latestSwaps || []).map((swap) => ({
+            ...swap,
+            offeredItem: itemsById[swap.offered_item_id],
+            requestedItem: itemsById[swap.requested_item_id],
+          })));
+        })
+        .subscribe();
 
       const otherUserIds = [...new Set((messages || []).map((message) => message.sender_id === currentUser.id ? message.receiver_id : message.sender_id).filter(Boolean))];
       let profileById = {};
@@ -359,7 +386,10 @@ export default function App() {
         }
       }).subscribe();
     }
-    return () => { if (channel) supabase.removeChannel(channel); };
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+      if (swapsChannel) supabase.removeChannel(swapsChannel);
+    };
   }, [currentUser?.id, currentUser?.name, selectedChatUser?.userId, selectedChatUser?.swapId]);
 
   useEffect(() => {
@@ -1353,9 +1383,15 @@ export default function App() {
                 <h2 className="text-lg sm:text-xl font-black tracking-tight flex items-center gap-2">
                   <span className="truncate">ბარტერის Matches</span>
                   <span className="bg-[#FF5500]/10 text-[#FF5500] text-xs px-2 py-0.5 rounded-full font-bold">
-                    {matchesFilter === "sent"
-                      ? sentMatches.length
-                      : filteredMatches.length}
+                    {swapRequests.length > 0
+                      ? matchesFilter === "sent"
+                        ? outgoingSwapRequests.length
+                        : matchesFilter === "completed"
+                          ? swapRequests.filter((swap) => swap.status === "accepted").length
+                          : incomingSwapRequests.length
+                      : matchesFilter === "sent"
+                        ? sentMatches.length
+                        : filteredMatches.length}
                   </span>
                 </h2>
                 <p className="text-xs text-slate-400">
@@ -1428,7 +1464,59 @@ export default function App() {
               </button>
             </div>
 
-            <div className="space-y-4">
+            {swapRequests.length > 0 && (
+              <div className="space-y-3">
+                {(matchesFilter === "sent"
+                  ? outgoingSwapRequests
+                  : matchesFilter === "completed"
+                    ? swapRequests.filter((swap) => swap.status === "accepted")
+                    : incomingSwapRequests
+                ).length === 0 ? (
+                  <div className={`rounded-xl border border-dashed p-8 text-center text-xs ${isDarkMode ? "border-slate-800 text-slate-500" : "border-slate-300 text-slate-400"}`}>
+                    გაცვლის მოთხოვნები არ არის.
+                  </div>
+                ) : (
+                  (matchesFilter === "sent"
+                    ? outgoingSwapRequests
+                    : matchesFilter === "completed"
+                      ? swapRequests.filter((swap) => swap.status === "accepted")
+                      : incomingSwapRequests
+                  ).map((swap) => (
+                    <article key={swap.id} className={`rounded-xl border p-4 ${isDarkMode ? "border-slate-800 bg-slate-900/90" : "border-slate-200 bg-white"}`}>
+                      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[10px] text-slate-400">თავაზობ</p>
+                          <p className="truncate text-xs font-bold">{swap.offeredItem?.title || swap.offeredItem?.name || "ნივთი"}</p>
+                        </div>
+                        <ArrowLeftRight className="h-4 w-4 text-[#FF5500]" />
+                        <div className="min-w-0 text-right">
+                          <p className="text-[10px] text-slate-400">გსურს</p>
+                          <p className="truncate text-xs font-bold">{swap.requestedItem?.title || swap.requestedItem?.name || "ნივთი"}</p>
+                        </div>
+                      </div>
+                      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+                        <span className={`text-[10px] font-bold ${swap.status === "accepted" ? "text-emerald-400" : swap.status === "rejected" ? "text-red-400" : "text-amber-400"}`}>
+                          {swap.status === "accepted" ? "დადასტურებული" : swap.status === "rejected" ? "უარყოფილი" : "მომლოდინე"}
+                        </span>
+                        {matchesFilter !== "sent" && swap.status === "pending" && (
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => handleSwapStatus(swap, "rejected")} className="rounded-md border border-red-500/30 px-3 py-2 text-[10px] font-bold text-red-400">უარყოფა</button>
+                            <button type="button" onClick={() => handleSwapStatus(swap, "accepted")} className="rounded-md bg-[#FF5500] px-3 py-2 text-[10px] font-bold text-white">დადასტურება</button>
+                          </div>
+                        )}
+                        {swap.status === "accepted" && (
+                          <button type="button" onClick={() => handleOpenChat({ userId: swap.sender_id === currentUser.id ? swap.receiver_id : swap.sender_id, name: "გაცვლის მონაწილე", swapId: swap.id, itemTitle: swap.requestedItem?.title || swap.offeredItem?.title })} className="inline-flex items-center gap-1.5 rounded-md border border-[#FF5500]/40 px-3 py-2 text-[10px] font-bold text-[#FF5500]">
+                            <MessageSquare className="h-3.5 w-3.5" /> ჩატი
+                          </button>
+                        )}
+                      </div>
+                    </article>
+                  ))
+                )}
+              </div>
+            )}
+
+            {swapRequests.length === 0 && <div className="space-y-4">
               {matchesFilter === "sent" ? (
                 sentMatches.length === 0 ? (
                   <div
@@ -1769,7 +1857,7 @@ export default function App() {
                   </div>
                 ))
               )}
-            </div>
+            </div>}
           </div>
         )}
 
