@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import LandingHeader from "./components/LandingHeader";
 import PricingModal from "./components/PricingModal";
+import Chat from "./components/Chat";
 import { useSubscription } from "./hooks/useSubscription";
 import { supabase, supabaseConfigurationError } from "./lib/supabase";
 import {
@@ -124,6 +125,12 @@ export default function App() {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isProfileLoading, setIsProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState("");
+  const [swapRequests, setSwapRequests] = useState([]);
+  const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
+  const [swapTargetItem, setSwapTargetItem] = useState(null);
+  const [selectedOfferItemId, setSelectedOfferItemId] = useState("");
+  const [isSubmittingSwap, setIsSubmittingSwap] = useState(false);
+  const [swapError, setSwapError] = useState("");
 
   const syncProfileFromUser = async (user) => {
     if (!supabase || !user?.id) {
@@ -273,6 +280,24 @@ export default function App() {
         image: item.image_url || item.image || "",
       })));
 
+      const { data: swaps, error: swapsError } = await supabase
+        .from("swaps")
+        .select("*")
+        .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`)
+        .order("created_at", { ascending: false });
+
+      if (swapsError) {
+        console.error("Failed to load swap requests:", swapsError);
+        setSwapRequests([]);
+      } else {
+        const itemsById = Object.fromEntries(normalizedItems.map((item) => [item.id, item]));
+        setSwapRequests((swaps || []).map((swap) => ({
+          ...swap,
+          offeredItem: itemsById[swap.offered_item_id],
+          requestedItem: itemsById[swap.requested_item_id],
+        })));
+      }
+
       const otherUserIds = [...new Set((messages || []).map((message) => message.sender_id === currentUser.id ? message.receiver_id : message.sender_id).filter(Boolean))];
       if (otherUserIds.length) {
         const { data: profiles } = await supabase.from("profiles").select("id, full_name, avatar_url").in("id", otherUserIds);
@@ -317,18 +342,31 @@ export default function App() {
 
     loadDatabaseState();
     if (selectedChatUser?.userId) {
-      channel = supabase.channel(`messages:${currentUser.id}:${selectedChatUser.userId}`).on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
+      channel = supabase.channel(`messages:${selectedChatUser.swapId || `${currentUser.id}:${selectedChatUser.userId}`}`).on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
         const message = payload.new;
-        if ((message.sender_id === selectedChatUser.userId && message.receiver_id === currentUser.id) || (message.sender_id === currentUser.id && message.receiver_id === selectedChatUser.userId)) setChatMessages((currentMessages) => [...currentMessages, message]);
+        const belongsToSwap = selectedChatUser.swapId
+          ? message.swap_id === selectedChatUser.swapId
+          : (message.sender_id === selectedChatUser.userId && message.receiver_id === currentUser.id) || (message.sender_id === currentUser.id && message.receiver_id === selectedChatUser.userId);
+        if (belongsToSwap) setChatMessages((currentMessages) => [...currentMessages, message]);
       }).subscribe();
     }
     return () => { if (channel) supabase.removeChannel(channel); };
-  }, [currentUser?.id, currentUser?.name, selectedChatUser?.userId]);
+  }, [currentUser?.id, currentUser?.name, selectedChatUser?.userId, selectedChatUser?.swapId]);
 
   useEffect(() => {
     if (!supabase || !currentUser?.id || !selectedChatUser?.userId) return;
-    supabase.from("messages").select("*").or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${selectedChatUser.userId}),and(sender_id.eq.${selectedChatUser.userId},receiver_id.eq.${currentUser.id})`).order("created_at", { ascending: true }).then(({ data }) => setChatMessages(data || []));
-  }, [currentUser?.id, selectedChatUser?.userId]);
+    const query = supabase.from("messages").select("*").order("created_at", { ascending: true });
+    const historyQuery = selectedChatUser.swapId
+      ? query.eq("swap_id", selectedChatUser.swapId)
+      : query.or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${selectedChatUser.userId}),and(sender_id.eq.${selectedChatUser.userId},receiver_id.eq.${currentUser.id})`);
+    historyQuery.then(({ data, error }) => {
+      if (error) {
+        console.error("Failed to load chat history:", error);
+        return;
+      }
+      setChatMessages(data || []);
+    });
+  }, [currentUser?.id, selectedChatUser?.userId, selectedChatUser?.swapId]);
 
   useEffect(() => {
     if (!isModalOpen) return undefined;
@@ -473,8 +511,94 @@ export default function App() {
         await refreshSubscription();
         setActiveTab("matches");
       }
+    } else if (pendingAuthAction === "swap") {
+      setSelectedOfferItemId(profileListings[0]?.id || "");
+      setSwapError("");
+      setIsSwapModalOpen(true);
     } else if (pendingAuthAction) setActiveTab(pendingAuthAction);
     setPendingAuthAction(null);
+  };
+
+  const openSwapModal = (item) => {
+    setSwapTargetItem(item);
+    if (!currentUser) {
+      setPendingAuthAction("swap");
+      setIsAuthModalOpen(true);
+      return;
+    }
+
+    setSelectedOfferItemId(profileListings[0]?.id || "");
+    setSwapError("");
+    setIsSwapModalOpen(true);
+  };
+
+  const handleSubmitSwap = async () => {
+    const offer = profileListings.find((item) => item.id === selectedOfferItemId);
+    if (!supabase || !currentUser?.id || !swapTargetItem || !offer) {
+      setSwapError("გაცვლისთვის აირჩიე შენი ნივთი.");
+      return;
+    }
+
+    setIsSubmittingSwap(true);
+    setSwapError("");
+    try {
+      const { data: swap, error } = await supabase
+        .from("swaps")
+        .insert({
+          sender_id: currentUser.id,
+          receiver_id: swapTargetItem.user_id || swapTargetItem.owner_id,
+          offered_item_id: offer.id,
+          requested_item_id: swapTargetItem.id,
+          status: "pending",
+        })
+        .select("*")
+        .single();
+
+      if (error) throw error;
+
+      setSwapRequests((requests) => [{
+        ...swap,
+        offeredItem: offer,
+        requestedItem: swapTargetItem,
+      }, ...requests]);
+      alert("გაცვლის მოთხოვნა გაიგზავნა!");
+      setIsSwapModalOpen(false);
+    } catch (error) {
+      console.error("Failed to send swap request:", error);
+      setSwapError(error.message || "მოთხოვნის გაგზავნა ვერ მოხერხდა.");
+    } finally {
+      setIsSubmittingSwap(false);
+    }
+  };
+
+  const handleSwapStatus = async (swap, status) => {
+    if (!supabase) return;
+
+    const { error } = await supabase
+      .from("swaps")
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq("id", swap.id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setSwapRequests((requests) => requests.map((request) => (
+      request.id === swap.id ? { ...request, status } : request
+    )));
+
+    if (status === "accepted") {
+      const otherUserId = swap.sender_id === currentUser.id ? swap.receiver_id : swap.sender_id;
+      setSelectedChatUser({
+        userId: otherUserId,
+        name: "გაცვლის მონაწილე",
+        itemTitle: swap.requestedItem?.title || swap.offeredItem?.title || "გაცვლის მოთხოვნა",
+        itemImage: swap.requestedItem?.image_url || swap.offeredItem?.image_url || "",
+        swapId: swap.id,
+      });
+      setActiveTab("chat");
+    }
   };
 
   const handleAuthSubmit = async (e) => {
@@ -549,9 +673,9 @@ export default function App() {
     setSentMatches(sentMatches.filter((match) => match.id !== id));
   };
 
-  const handleOpenChat = ({ userId, name, avatar, itemTitle, itemImage }) => {
+  const handleOpenChat = ({ userId, name, avatar, itemTitle, itemImage, swapId }) => {
     if (!userId) return;
-    setSelectedChatUser({ userId, name, avatar, itemTitle, itemImage });
+    setSelectedChatUser({ userId, name, avatar, itemTitle, itemImage, swapId });
     setActiveTab("chat");
   };
 
@@ -683,6 +807,7 @@ export default function App() {
     const { data, error } = await supabase
       .from("messages")
       .insert({
+        ...(selectedChatUser.swapId ? { swap_id: selectedChatUser.swapId } : {}),
         sender_id: currentUser.id,
         receiver_id: selectedChatUser.userId,
         content,
@@ -844,6 +969,8 @@ export default function App() {
     if (matchesFilter === "sent") return false;
     return true;
   });
+  const incomingSwapRequests = swapRequests.filter((swap) => swap.receiver_id === currentUser?.id);
+  const outgoingSwapRequests = swapRequests.filter((swap) => swap.sender_id === currentUser?.id);
 
   const scrollToSection = (sectionId) => {
     document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1133,6 +1260,16 @@ export default function App() {
                               <span className="shrink-0 rounded-full bg-[#FF5500]/10 px-2 py-1 text-[10px] font-bold text-[#FF5500]">{item.category || "ტექნიკა"}</span>
                             </div>
                             <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-400">სასურველი გაცვლა: {item.desired_trade || item.desiredTrade || "შეთავაზება"}</p>
+                            {(item.user_id || item.owner_id) !== currentUser?.id && (
+                              <button
+                                type="button"
+                                onClick={() => openSwapModal(item)}
+                                className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-[#FF5500] px-3 py-2 text-xs font-bold text-white transition hover:bg-[#e04b00]"
+                              >
+                                <ArrowLeftRight className="h-4 w-4" />
+                                გაცვლა
+                              </button>
+                            )}
                           </div>
                         </article>
                       );
@@ -1180,6 +1317,81 @@ export default function App() {
         {/* MATCHES PAGE */}
         {activeTab === "matches" && currentUser && (
           <div className="max-w-xl mx-auto px-2.5 min-[360px]:px-3 sm:px-4 py-5 sm:py-6 space-y-5 pb-24">
+            <section className={`rounded-lg border p-4 ${isDarkMode ? "border-slate-800 bg-slate-900/70" : "border-slate-200 bg-white"}`}>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#FF5500]">Swap requests</p>
+                  <h2 className="mt-1 text-base font-black">გაცვლის მოთხოვნები</h2>
+                </div>
+                <span className="rounded-full bg-[#FF5500]/10 px-2 py-1 text-[10px] font-bold text-[#FF5500]">
+                  {incomingSwapRequests.filter((swap) => swap.status === "pending").length} ახალი
+                </span>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 rounded-md border border-slate-800 p-1 text-[11px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => setMatchesFilter("incoming")}
+                  className={`rounded px-2 py-2 ${matchesFilter === "incoming" ? "bg-[#FF5500] text-white" : "text-slate-400"}`}
+                >
+                  შემომავალი ({incomingSwapRequests.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMatchesFilter("sent")}
+                  className={`rounded px-2 py-2 ${matchesFilter === "sent" ? "bg-[#FF5500] text-white" : "text-slate-400"}`}
+                >
+                  გამავალი ({outgoingSwapRequests.length})
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {(matchesFilter === "sent" ? outgoingSwapRequests : incomingSwapRequests).length === 0 ? (
+                  <p className="py-6 text-center text-xs text-slate-400">გაცვლის მოთხოვნები ჯერ არ არის.</p>
+                ) : (matchesFilter === "sent" ? outgoingSwapRequests : incomingSwapRequests).map((swap) => (
+                  <div key={swap.id} className="rounded-md border border-slate-800 p-3">
+                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[10px] text-slate-500">თავაზობ</p>
+                        <p className="truncate text-xs font-bold">{swap.offeredItem?.title || swap.offeredItem?.name || "ნივთი"}</p>
+                      </div>
+                      <ArrowLeftRight className="h-4 w-4 text-[#FF5500]" />
+                      <div className="min-w-0 text-right">
+                        <p className="text-[10px] text-slate-500">გსურს</p>
+                        <p className="truncate text-xs font-bold">{swap.requestedItem?.title || swap.requestedItem?.name || "ნივთი"}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-2">
+                      <span className={`text-[10px] font-bold ${swap.status === "accepted" ? "text-emerald-400" : swap.status === "rejected" ? "text-red-400" : "text-amber-400"}`}>
+                        {swap.status === "accepted" ? "დადასტურებული" : swap.status === "rejected" ? "უარყოფილი" : "მომლოდინე"}
+                      </span>
+                      {matchesFilter !== "sent" && swap.status === "pending" && (
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => handleSwapStatus(swap, "rejected")} className="rounded-md border border-red-500/30 px-2.5 py-1.5 text-[10px] font-bold text-red-400">უარყოფა</button>
+                          <button type="button" onClick={() => handleSwapStatus(swap, "accepted")} className="rounded-md bg-[#FF5500] px-2.5 py-1.5 text-[10px] font-bold text-white">დადასტურება</button>
+                        </div>
+                      )}
+                      {swap.status === "accepted" && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenChat({
+                            userId: swap.sender_id === currentUser.id ? swap.receiver_id : swap.sender_id,
+                            name: "გაცვლის მონაწილე",
+                            itemTitle: swap.requestedItem?.title || swap.offeredItem?.title || "გაცვლის მოთხოვნა",
+                            itemImage: swap.requestedItem?.image_url || swap.offeredItem?.image_url || "",
+                            swapId: swap.id,
+                          })}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-[#FF5500]/40 px-2.5 py-1.5 text-[10px] font-bold text-[#FF5500] hover:bg-[#FF5500]/10"
+                        >
+                          <MessageSquare className="h-3.5 w-3.5" />
+                          ჩატი
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <h2 className="text-lg sm:text-xl font-black tracking-tight flex items-center gap-2">
@@ -1976,7 +2188,15 @@ export default function App() {
                   selectedChatUser ? "block" : "hidden md:block"
                 }`}
               >
-                {selectedChatUser ? (
+                {selectedChatUser?.swapId ? (
+                  <Chat
+                    swapId={selectedChatUser.swapId}
+                    currentUserId={currentUser.id}
+                    otherUser={selectedChatUser}
+                    onBack={() => setSelectedChatUser(null)}
+                    isDarkMode={isDarkMode}
+                  />
+                ) : selectedChatUser ? (
                 <>
                   <div
                     className={`flex items-center gap-3 px-4 py-3 border-b ${
@@ -2118,6 +2338,56 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {isSwapModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+          <div className={`w-full max-w-md rounded-xl border p-5 shadow-2xl ${isDarkMode ? "border-slate-800 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-900"}`}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#FF5500]">Swap request</p>
+                <h2 className="mt-1 text-lg font-black">აირჩიე გასაცვლელი ნივთი</h2>
+              </div>
+              <button type="button" onClick={() => setIsSwapModalOpen(false)} className="rounded-md p-2 text-slate-400 hover:text-[#FF5500]" aria-label="დახურვა">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="mt-3 text-xs text-slate-400">
+              გსურს გაცვლა: <span className="font-bold text-[#FF5500]">{swapTargetItem?.title || swapTargetItem?.name || "ნივთი"}</span>
+            </p>
+
+            {swapError && <p className="mt-3 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">{swapError}</p>}
+
+            {profileListings.length === 0 ? (
+              <div className="mt-6 rounded-md border border-dashed border-slate-700 px-4 py-8 text-center">
+                <Package className="mx-auto h-8 w-8 text-[#FF5500]" />
+                <p className="mt-3 text-xs font-bold">გასაცვლელი ნივთი ჯერ არ გაქვს.</p>
+                <button type="button" onClick={() => { setIsSwapModalOpen(false); handleProtectedNavigation("listing"); }} className="mt-4 rounded-md bg-[#FF5500] px-4 py-2 text-xs font-bold text-white">ნივთის დამატება</button>
+              </div>
+            ) : (
+              <>
+                <div className="mt-5 max-h-64 space-y-2 overflow-y-auto">
+                  {profileListings.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setSelectedOfferItemId(item.id)}
+                      className={`flex w-full items-center gap-3 rounded-md border p-3 text-left transition ${selectedOfferItemId === item.id ? "border-[#FF5500] bg-[#FF5500]/10" : "border-slate-800 hover:border-[#FF5500]/50"}`}
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-slate-800 text-[#FF5500]"><Package className="h-5 w-5" /></div>
+                      <span className="min-w-0 flex-1 truncate text-xs font-bold">{item.title || item.name || "უსათაურო ნივთი"}</span>
+                      {selectedOfferItemId === item.id && <Check className="h-4 w-4 text-[#FF5500]" />}
+                    </button>
+                  ))}
+                </div>
+                <button type="button" disabled={isSubmittingSwap || !selectedOfferItemId} onClick={handleSubmitSwap} className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-[#FF5500] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#e04b00] disabled:cursor-not-allowed disabled:opacity-60">
+                  {isSubmittingSwap && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                  {isSubmittingSwap ? "იგზავნება..." : "მოთხოვნის გაგზავნა"}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 4. ADD LISTING MODAL (ნივთის აღწერის ფორმა) */}
       {isModalOpen && (
