@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Check, Crown, LoaderCircle, X, Zap } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import MockPaymentModal from "./MockPaymentModal";
 
 const plans = [
   {
@@ -26,18 +27,26 @@ const plans = [
 export default function PricingModal({ isOpen = true, onClose, onSelectPlan }) {
   const [loadingPlan, setLoadingPlan] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState(null);
 
   if (!isOpen) return null;
 
-  const handleSelectPlan = async (plan) => {
+  const handleSelectPlan = (plan) => {
     if (!supabase) {
       setErrorMessage("Supabase არ არის კონფიგურირებული.");
       return;
     }
 
-    setLoadingPlan(plan.id);
     setErrorMessage("");
+    setSelectedPlan(plan);
+    setIsPaymentModalOpen(true);
+  };
 
+  const handlePaymentSuccess = async () => {
+    if (!selectedPlan || !supabase) return;
+
+    setLoadingPlan(selectedPlan.id);
     try {
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError) throw userError;
@@ -48,7 +57,7 @@ export default function PricingModal({ isOpen = true, onClose, onSelectPlan }) {
         .upsert(
           {
             user_id: userData.user.id,
-            plan_type: plan.id,
+            plan_type: selectedPlan.id,
             status: "active",
             updated_at: new Date().toISOString(),
           },
@@ -57,8 +66,10 @@ export default function PricingModal({ isOpen = true, onClose, onSelectPlan }) {
 
       if (subscriptionError) throw subscriptionError;
 
-      await onSelectPlan?.(plan.id);
+      await onSelectPlan?.(selectedPlan.id);
       alert("ტარიფი წარმატებით შეიცვალა!");
+      setIsPaymentModalOpen(false);
+      setSelectedPlan(null);
       onClose?.();
     } catch (error) {
       console.error("Error updating subscription:", error);
@@ -69,15 +80,16 @@ export default function PricingModal({ isOpen = true, onClose, onSelectPlan }) {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/75 p-4 backdrop-blur-sm"
+    <>
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/75 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-labelledby="pricing-modal-title"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose?.();
       }}
-    >
+      >
       <div className="relative my-8 w-full max-w-5xl rounded-xl border border-slate-800 bg-slate-950 p-5 shadow-2xl shadow-black/40 sm:p-7">
         <button
           type="button"
@@ -160,6 +172,19 @@ export default function PricingModal({ isOpen = true, onClose, onSelectPlan }) {
           })}
         </div>
       </div>
-    </div>
+      </div>
+      <MockPaymentModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => {
+          if (loadingPlan === null) {
+            setIsPaymentModalOpen(false);
+            setSelectedPlan(null);
+          }
+        }}
+        onSuccess={handlePaymentSuccess}
+        amount={selectedPlan?.id === "pro" ? 15 : 0}
+        title={selectedPlan?.id === "pro" ? "Pro პაკეტის გააქტიურება" : "Free პაკეტის გააქტიურება"}
+      />
+    </>
   );
 }
