@@ -846,23 +846,24 @@ export default function App() {
     message.sender_id === currentUser?.id ||
     message.user_id === currentUser?.id;
 
-  const handleDeleteListing = async (id) => {
+  const handleDeleteListing = async (itemId) => {
     if (!supabase) {
       alert(supabaseConfigurationError || "Supabase არ არის კონფიგურირებული.");
       return;
     }
 
-    const { error } = await supabase.from("items").delete().eq("id", id);
+    const { error } = await supabase.from("items").delete().eq("id", itemId);
 
     if (error) {
-      alert(error.message);
+      const isRlsError = error.code === "42501" || /row-level security|permission denied|not allowed/i.test(error.message || "");
+      alert(isRlsError ? "ნივთის წაშლის უფლება არ გაქვს. შეამოწმე Row Level Security policy." : error.message);
       return;
     }
 
     setProfileListings((listings) =>
-      listings.filter((listing) => listing.id !== id),
+      listings.filter((listing) => listing.id !== itemId),
     );
-    setHomepageItems((items) => items.filter((item) => item.id !== id));
+    setHomepageItems((items) => items.filter((item) => item.id !== itemId));
   };
 
   const handleDeleteNotification = (id) => {
