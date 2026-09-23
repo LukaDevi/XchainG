@@ -1,25 +1,16 @@
 import { useState } from "react";
-import { Check, Crown, LoaderCircle, Sparkles, X, Zap } from "lucide-react";
+import { Check, Crown, LoaderCircle, X, Zap } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 const plans = [
   {
     id: "free",
     name: "Free",
-    price: "$0",
+    price: "0 ₾",
+    period: "/თვე",
     description: "AI ფუნქციების გარეშე. თითო განცხადება: 1.00 ₾.",
     icon: Zap,
     features: ["1.00 ₾ თითო განცხადებაზე", "ძირითადი განცხადების შექმნა", "AI შეფასება და აღწერა გამორთულია"],
-  },
-  {
-    id: "basic",
-    name: "Basic",
-    price: "$5",
-    period: "/თვე",
-    description: "სტანდარტული განცხადებების შექმნა $5/თვეში.",
-    icon: Sparkles,
-    featured: true,
-    features: ["სტანდარტული განცხადების შექმნა", "1.00 ₾ თითო განცხადებაზე", "AI და ავტომატური მეჩინგის გარეშე"],
   },
   {
     id: "pro",
@@ -113,7 +104,7 @@ export default function PricingModal({ isOpen = true, onClose, onSelectPlan }) {
           </div>
         )}
 
-        <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="mx-auto mt-8 grid max-w-3xl grid-cols-1 gap-4 sm:grid-cols-2">
           {plans.map((plan) => {
             const PlanIcon = plan.icon;
             return (

@@ -1383,18 +1383,6 @@ export default function App() {
                 <p className="text-xs text-slate-400">
                   შენი შეთავაზებები და AI შეფასებები
                 </p>
-                {subscriptionPlan === "basic" && (
-                  <div className="mt-3 rounded-md border border-[#FF5500]/30 bg-[#FF5500]/10 px-3 py-2 text-xs text-[#FF5500]">
-                    მეჩინგი და AI ასისტენტი ხელმისაწვდომია მხოლოდ Pro ტარიფზე.
-                    <button
-                      type="button"
-                      onClick={() => setIsPricingOpen(true)}
-                      className="ml-1 font-bold underline underline-offset-2"
-                    >
-                      განაახლე ტარიფი
-                    </button>
-                  </div>
-                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-2">

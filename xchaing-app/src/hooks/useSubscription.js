@@ -30,8 +30,8 @@ export function useSubscription(userId) {
         const normalizedPlan = String(data?.plan_type || "free").trim().toLowerCase();
         const isExpired = data?.expires_at && new Date(data.expires_at) < new Date();
         const nextPlan =
-          data?.status?.toLowerCase() === "active" && !isExpired && normalizedPlan !== "free"
-            ? normalizedPlan
+          data?.status?.toLowerCase() === "active" && !isExpired && normalizedPlan === "pro"
+            ? "pro"
             : "free";
 
         if (!cancelled) setPlan(nextPlan);
@@ -69,8 +69,8 @@ export function useSubscription(userId) {
       const normalizedPlan = String(data?.plan_type || "free").trim().toLowerCase();
       const isExpired = data?.expires_at && new Date(data.expires_at) < new Date();
       const nextPlan =
-        data?.status?.toLowerCase() === "active" && !isExpired && normalizedPlan !== "free"
-          ? normalizedPlan
+        data?.status?.toLowerCase() === "active" && !isExpired && normalizedPlan === "pro"
+          ? "pro"
           : "free";
 
       setPlan(nextPlan);
