@@ -348,7 +348,13 @@ export default function App() {
         const belongsToSwap = selectedChatUser.swapId
           ? message.swap_id === selectedChatUser.swapId
           : (message.sender_id === selectedChatUser.userId && message.receiver_id === currentUser.id) || (message.sender_id === currentUser.id && message.receiver_id === selectedChatUser.userId);
-        if (belongsToSwap) setChatMessages((currentMessages) => [...currentMessages, message]);
+        if (belongsToSwap) {
+          setChatMessages((currentMessages) => {
+            const exists = currentMessages.some((currentMessage) => currentMessage.id === message.id);
+            if (exists) return currentMessages;
+            return [...currentMessages, message];
+          });
+        }
       }).subscribe();
     }
     return () => { if (channel) supabase.removeChannel(channel); };
@@ -819,7 +825,20 @@ export default function App() {
     if (error) {
       alert(error.message);
     } else if (data) {
-      setChatMessages((currentMessages) => [...currentMessages, data]);
+      setChatMessages((currentMessages) => {
+        const temporaryIndex = currentMessages.findIndex(
+          (message) => message.id?.startsWith("temp-") && message.content === data.content,
+        );
+        if (temporaryIndex >= 0) {
+          const nextMessages = [...currentMessages];
+          nextMessages[temporaryIndex] = data;
+          return nextMessages;
+        }
+
+        const exists = currentMessages.some((message) => message.id === data.id);
+        if (exists) return currentMessages;
+        return [...currentMessages, data];
+      });
       setMessageDraft("");
     }
   };

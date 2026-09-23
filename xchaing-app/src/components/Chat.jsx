@@ -72,11 +72,11 @@ export default function Chat({ swapId, currentUserId, otherUser, onBack, isDarkM
         },
         (payload) => {
           if (!cancelled) {
-            setMessages((currentMessages) => (
-              currentMessages.some((message) => message.id === payload.new.id)
-                ? currentMessages
-                : [...currentMessages, payload.new]
-            ));
+            setMessages((currentMessages) => {
+              const exists = currentMessages.some((message) => message.id === payload.new.id);
+              if (exists) return currentMessages;
+              return [...currentMessages, payload.new];
+            });
           }
         },
       )
@@ -90,7 +90,15 @@ export default function Chat({ swapId, currentUserId, otherUser, onBack, isDarkM
       .then(({ data, error: fetchError }) => {
         if (cancelled) return;
         if (fetchError) setError(fetchError.message);
-        else setMessages(data || []);
+        else {
+          setMessages((currentMessages) => {
+            const messagesById = new Map(currentMessages.map((message) => [message.id, message]));
+            (data || []).forEach((message) => messagesById.set(message.id, message));
+            return [...messagesById.values()].sort((first, second) => (
+              new Date(first.created_at) - new Date(second.created_at)
+            ));
+          });
+        }
         setLoading(false);
       });
 
@@ -124,6 +132,20 @@ export default function Chat({ swapId, currentUserId, otherUser, onBack, isDarkM
     if (sendError) {
       setError(sendError.message);
     } else if (data) {
+      setMessages((currentMessages) => {
+        const temporaryIndex = currentMessages.findIndex(
+          (message) => message.id?.startsWith("temp-") && message.content === data.content,
+        );
+        if (temporaryIndex >= 0) {
+          const nextMessages = [...currentMessages];
+          nextMessages[temporaryIndex] = data;
+          return nextMessages;
+        }
+
+        const exists = currentMessages.some((message) => message.id === data.id);
+        if (exists) return currentMessages;
+        return [...currentMessages, data];
+      });
       setDraft("");
     }
     setSending(false);
