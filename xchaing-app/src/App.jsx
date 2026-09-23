@@ -56,6 +56,8 @@ export default function App() {
   // Modals & Sidebar State
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [listingFee, setListingFee] = useState(null);
+  const [isPayingListingFee, setIsPayingListingFee] = useState(false);
   const [isPricingOpen, setIsPricingOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [pendingAuthAction, setPendingAuthAction] = useState(null);
@@ -471,13 +473,6 @@ export default function App() {
   const handleProtectedNavigation = async (target) => {
     if (currentUser) {
       if (target === "listing") {
-        const latestPlan = await getLatestSubscriptionPlan();
-        if (latestPlan === "free") {
-          alert("განცხადების დასამატებლად აირჩიე ფასიანი ტარიფი.");
-          setIsPricingOpen(true);
-          return;
-        }
-        await refreshSubscription();
         setIsModalOpen(true);
       }
       else if (target === "matches") {
@@ -502,14 +497,7 @@ export default function App() {
 
   const completePendingAuthAction = async () => {
     if (pendingAuthAction === "listing") {
-      const latestPlan = await getLatestSubscriptionPlan();
-      if (latestPlan === "free") {
-        alert("განცხადების დასამატებლად აირჩიე ფასიანი ტარიფი.");
-        setIsPricingOpen(true);
-      } else {
-        await refreshSubscription();
-        setIsModalOpen(true);
-      }
+      setIsModalOpen(true);
     } else if (pendingAuthAction === "matches") {
       const latestPlan = await getLatestSubscriptionPlan();
       if (latestPlan !== "pro") {
@@ -930,6 +918,8 @@ export default function App() {
 
   const handleCloseListingModal = () => {
     setIsModalOpen(false);
+    setListingFee(null);
+    setIsPayingListingFee(false);
     setCapturedPhoto((previousPhoto) => {
       if (previousPhoto?.previewUrl) URL.revokeObjectURL(previousPhoto.previewUrl);
       return null;
@@ -944,20 +934,32 @@ export default function App() {
     });
   };
 
-  const handleAddListing = async (e) => {
+  const handleAddListing = async (e, paymentConfirmed = false) => {
     e.preventDefault();
 
     const latestPlan = await getLatestSubscriptionPlan();
-    if (latestPlan === "free") {
-      alert("განცხადების დასამატებლად აირჩიე ფასიანი ტარიფი.");
-      setIsPricingOpen(true);
-      handleCloseListingModal();
-      return;
-    }
     await refreshSubscription();
 
     if (!capturedPhoto?.blob) {
       alert("განცხადების დასამატებლად გადაიღე ნივთის ფოტო კამერით.");
+      return;
+    }
+
+    const { count: listingCount, error: listingCountError } = await supabase
+      .from("items")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", currentUser.id)
+      .eq("status", "active");
+
+    if (listingCountError) {
+      alert(listingCountError.message);
+      return;
+    }
+
+    const currentListingCount = listingCount || 0;
+    const requiredFee = latestPlan === "pro" && currentListingCount < 10 ? 0 : 1;
+    if (requiredFee > 0 && !paymentConfirmed) {
+      setListingFee(requiredFee);
       return;
     }
 
@@ -989,10 +991,13 @@ export default function App() {
     }
 
     alert(
-      subscriptionPlan === "pro"
-        ? "განცხადება წარმატებით დაემატა AI შეფასებით! (საფასური: 0.50 ₾)"
+      latestPlan === "pro"
+        ? requiredFee === 0
+          ? "განცხადება წარმატებით დაემატა უფასოდ Pro ტარიფით!"
+          : "განცხადება წარმატებით დაემატა AI ფუნქციებით! (საფასური: 1.00 ₾)"
         : "განცხადება წარმატებით დაემატა! (საფასური: 1.00 ₾)",
     );
+    setListingFee(null);
     handleCloseListingModal();
   };
 
@@ -1005,6 +1010,20 @@ export default function App() {
   });
   const incomingSwapRequests = swapRequests.filter((swap) => swap.receiver_id === currentUser?.id);
   const outgoingSwapRequests = swapRequests.filter((swap) => swap.sender_id === currentUser?.id);
+  const listingFeePreview = subscriptionPlan === "pro" && profileListings.length < 10 ? 0 : 1;
+
+  const handleGenerateWithAI = () => {
+    if (subscriptionPlan !== "pro") {
+      alert("AI features available in Pro plan");
+      return;
+    }
+
+    const title = formData.title.trim() || "ეს ნივთი";
+    setFormData((currentForm) => ({
+      ...currentForm,
+      comment: `${title} არის გაცვლისთვის მომზადებული ნივთი. დამატებითი დეტალები და მდგომარეობა აღწერილია განცხადებაში.`,
+    }));
+  };
 
   const scrollToSection = (sectionId) => {
     document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -2351,6 +2370,32 @@ export default function App() {
         </div>
       )}
 
+      {listingFee !== null && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+          <div className={`w-full max-w-sm rounded-xl border p-5 shadow-2xl ${isDarkMode ? "border-slate-800 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-900"}`}>
+            <h2 className="text-lg font-black">გამოქვეყნების საფასური</h2>
+            <p className="mt-2 text-xs leading-relaxed text-slate-400">
+              ამ განცხადების გამოქვეყნების საფასურია <strong className="text-[#FF5500]">{listingFee.toFixed(2)} ₾</strong>.
+            </p>
+            <div className="mt-5 flex gap-2">
+              <button type="button" onClick={() => setListingFee(null)} className="min-h-11 flex-1 rounded-md border border-slate-700 px-3 text-xs font-bold text-slate-300">გაუქმება</button>
+              <button
+                type="button"
+                disabled={isPayingListingFee}
+                onClick={async () => {
+                  setIsPayingListingFee(true);
+                  await handleAddListing({ preventDefault: () => {} }, true);
+                  setIsPayingListingFee(false);
+                }}
+                className="min-h-11 flex-1 rounded-md bg-[#FF5500] px-3 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isPayingListingFee ? "მუშავდება..." : "გადახდა და გამოქვეყნება"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 4. ADD LISTING MODAL (ნივთის აღწერის ფორმა) */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 min-[360px]:p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
@@ -2539,9 +2584,23 @@ export default function App() {
 
               {/* Description / Comment */}
               <div>
-                <label className="block text-[11px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
-                  აღწერა / დეტალები
-                </label>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    აღწერა / დეტალები
+                  </label>
+                  {subscriptionPlan === "pro" ? (
+                    <button
+                      type="button"
+                      onClick={handleGenerateWithAI}
+                      className="inline-flex items-center gap-1 rounded-md border border-[#FF5500]/40 px-2 py-1 text-[10px] font-bold text-[#FF5500] hover:bg-[#FF5500]/10"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      Generate with AI
+                    </button>
+                  ) : (
+                    <span className="text-[10px] text-slate-500">AI features available in Pro plan</span>
+                  )}
+                </div>
                 <textarea
                   rows={3}
                   value={formData.comment}
@@ -2572,7 +2631,7 @@ export default function App() {
                   </span>
                 </div>
                 <span className="font-black text-[#FF5500] text-sm">
-                  {subscriptionPlan === "pro" ? "0.50 ₾" : "1.00 ₾"}
+                  {listingFeePreview === 0 ? "0 ₾" : "1.00 ₾"}
                 </span>
               </div>
 
@@ -2581,7 +2640,7 @@ export default function App() {
                 className="w-full min-h-11 bg-[#FF5500] hover:bg-[#e04b00] active:scale-98 text-white font-bold py-3 rounded-lg text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-[#FF5500]/25"
               >
                 {subscriptionPlan === "pro" && <Sparkles className="w-4 h-4" />}
-                <span>{subscriptionPlan === "pro" ? "გამოქვეყნება (0.50 ₾)" : "განცხადების გამოქვეყნება (1.00 ₾)"}</span>
+                <span>{listingFeePreview === 0 ? "გამოქვეყნება უფასოდ" : "განცხადების გამოქვეყნება (1.00 ₾)"}</span>
               </button>
             </form>
           </div>
