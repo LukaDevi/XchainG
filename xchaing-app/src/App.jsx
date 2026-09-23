@@ -299,9 +299,10 @@ export default function App() {
       }
 
       const otherUserIds = [...new Set((messages || []).map((message) => message.sender_id === currentUser.id ? message.receiver_id : message.sender_id).filter(Boolean))];
+      let profileById = {};
       if (otherUserIds.length) {
-        const { data: profiles } = await supabase.from("profiles").select("id, full_name, avatar_url").in("id", otherUserIds);
-        const profileById = Object.fromEntries((profiles || []).map((item) => [item.id, item]));
+        const { data: profiles } = await supabase.from("profiles").select("id, full_name, username, email, avatar_url").in("id", otherUserIds);
+        profileById = Object.fromEntries((profiles || []).map((item) => [item.id, item]));
         const latestByUser = new Map();
         (messages || []).forEach((message) => {
           const otherId = message.sender_id === currentUser.id ? message.receiver_id : message.sender_id;
@@ -310,7 +311,7 @@ export default function App() {
         setChatConversations([...latestByUser.entries()].map(([userId, message]) => ({
           id: userId,
           userId,
-          name: profileById[userId]?.full_name || "მომხმარებელი",
+          name: profileById[userId]?.full_name || profileById[userId]?.username || profileById[userId]?.email || "მომხმარებელი",
           avatar: profileById[userId]?.avatar_url || "",
           itemTitle: "",
           itemImage: "",
@@ -331,7 +332,7 @@ export default function App() {
         id: `${ownItem.id}-${otherItem.id}`,
         type: "incoming",
         myProduct: { title: ownItem.title || ownItem.name, image: ownItem.image_url || ownItem.image || "", estValue: ownItem.value || ownItem.price || "" },
-        offeredProduct: { userId: otherItem.user_id || otherItem.owner_id, title: otherItem.title || otherItem.name, user: "მომხმარებელი", rating: 0, image: otherItem.image_url || otherItem.image || "", estValue: otherItem.value || otherItem.price || "" },
+        offeredProduct: { userId: otherItem.user_id || otherItem.owner_id, title: otherItem.title || otherItem.name, user: profileById[otherItem.user_id || otherItem.owner_id]?.full_name || profileById[otherItem.user_id || otherItem.owner_id]?.username || profileById[otherItem.user_id || otherItem.owner_id]?.email || "მომხმარებელი", rating: 0, image: otherItem.image_url || otherItem.image || "", estValue: otherItem.value || otherItem.price || "" },
         matchScore: 80,
         status: "pending",
         aiComment: "ეს შეთავაზება დაფუძნებულია რეალურ ნივთებსა და გაცვლის სურვილზე.",

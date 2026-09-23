@@ -8,7 +8,31 @@ export default function Chat({ swapId, currentUserId, otherUser, onBack, isDarkM
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [participant, setParticipant] = useState(null);
   const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    if (!supabase || !otherUser?.userId) return undefined;
+
+    let cancelled = false;
+    supabase
+      .from("profiles")
+      .select("full_name, username, email, avatar_url")
+      .eq("id", otherUser.userId)
+      .maybeSingle()
+      .then(({ data, error: profileError }) => {
+        if (cancelled) return;
+        if (profileError) {
+          console.error("Failed to load chat participant profile:", profileError);
+          return;
+        }
+        setParticipant(data || null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [otherUser?.userId]);
 
   useEffect(() => {
     if (!supabase || !swapId || !currentUserId) return undefined;
@@ -78,11 +102,6 @@ export default function Chat({ swapId, currentUserId, otherUser, onBack, isDarkM
     if (sendError) {
       setError(sendError.message);
     } else if (data) {
-      setMessages((currentMessages) => (
-        currentMessages.some((message) => message.id === data.id)
-          ? currentMessages
-          : [...currentMessages, data]
-      ));
       setDraft("");
     }
     setSending(false);
@@ -94,11 +113,21 @@ export default function Chat({ swapId, currentUserId, otherUser, onBack, isDarkM
         <button type="button" onClick={onBack} className="inline-flex h-10 w-10 items-center justify-center rounded-md text-slate-400 hover:text-white md:hidden" aria-label="ჩატების სიაში დაბრუნება">
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#FF5500]/40 bg-[#FF5500]/10 text-[#FF5500]">
-          <MessageSquare className="h-5 w-5" />
-        </div>
+        {participant?.avatar_url || otherUser?.avatar ? (
+          <img
+            src={participant?.avatar_url || otherUser.avatar}
+            alt={participant?.full_name || participant?.username || otherUser?.name || "მომხმარებელი"}
+            className="h-10 w-10 rounded-full border-2 border-[#FF5500]/40 object-cover"
+          />
+        ) : (
+          <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#FF5500]/40 bg-[#FF5500]/10 text-[#FF5500]">
+            <MessageSquare className="h-5 w-5" />
+          </div>
+        )}
         <div className="min-w-0">
-          <h2 className="truncate text-sm font-black">{otherUser?.name || "გაცვლის მონაწილე"}</h2>
+          <h2 className="truncate text-sm font-black">
+            {participant?.full_name || participant?.username || participant?.email || otherUser?.name || "მომხმარებელი"}
+          </h2>
           <p className="truncate text-[10px] text-slate-400">გაცვლა: {otherUser?.itemTitle || "მიღებული მოთხოვნა"}</p>
         </div>
       </header>
@@ -112,7 +141,20 @@ export default function Chat({ swapId, currentUserId, otherUser, onBack, isDarkM
             დაიწყე საუბარი გაცვლის დეტალებზე.
           </div>
         ) : messages.map((message) => (
-          <div key={message.id} className={`flex ${message.sender_id === currentUserId ? "justify-end" : "justify-start"}`}>
+          <div key={message.id} className={`flex items-end gap-2 ${message.sender_id === currentUserId ? "justify-end" : "justify-start"}`}>
+            {message.sender_id !== currentUserId && (
+              participant?.avatar_url || otherUser?.avatar ? (
+                <img
+                  src={participant?.avatar_url || otherUser.avatar}
+                  alt={participant?.full_name || participant?.username || "მომხმარებელი"}
+                  className="h-7 w-7 rounded-full object-cover"
+                />
+              ) : (
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#FF5500]/10 text-[#FF5500]">
+                  <MessageSquare className="h-3.5 w-3.5" />
+                </div>
+              )
+            )}
             <div className={`max-w-[80%] rounded-xl px-3 py-2 text-xs ${message.sender_id === currentUserId ? "rounded-br-none bg-[#FF5500] text-white" : "rounded-bl-none border border-slate-200 bg-white text-slate-800"}`}>
               {message.content}
             </div>
