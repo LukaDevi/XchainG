@@ -852,7 +852,10 @@ export default function App() {
       return;
     }
 
-    const { error } = await supabase.from("items").delete().eq("id", itemId);
+    const { error } = await supabase
+      .from("items")
+      .delete()
+      .eq("id", itemId);
 
     if (error) {
       console.error("Error deleting item:", error.message);
