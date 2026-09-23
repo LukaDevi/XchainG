@@ -858,16 +858,13 @@ export default function App() {
     message.sender_id === currentUser?.id ||
     message.user_id === currentUser?.id;
 
-  const handleMarkListingTraded = async (id) => {
+  const handleDeleteListing = async (id) => {
     if (!supabase) {
       alert(supabaseConfigurationError || "Supabase არ არის კონფიგურირებული.");
       return;
     }
 
-    const { error } = await supabase
-      .from("items")
-      .update({ status: "traded", updated_at: new Date().toISOString() })
-      .eq("id", id);
+    const { error } = await supabase.from("items").delete().eq("id", id);
 
     if (error) {
       alert(error.message);
@@ -1926,7 +1923,15 @@ export default function App() {
                       <p className="text-xs font-black">{listing.value}</p>
                       <div className="flex gap-2 pt-1">
                         <button className="min-h-10 flex-1 rounded-md border border-slate-700 text-[10px] font-bold text-slate-400 hover:text-[#FF5500] transition">Edit</button>
-                        <button onClick={() => handleMarkListingTraded(listing.id)} className="min-h-10 flex-1 rounded-md bg-[#FF5500] text-white text-[10px] font-bold hover:bg-[#e04b00] transition">Traded</button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteListing(listing.id)}
+                          className="inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-md border border-red-500/30 text-[10px] font-bold text-red-400 transition hover:bg-red-500/10"
+                          aria-label="წაშლა"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          წაშლა
+                        </button>
                       </div>
                     </div>
                   </article>
