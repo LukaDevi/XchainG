@@ -855,8 +855,9 @@ export default function App() {
     const { error } = await supabase.from("items").delete().eq("id", itemId);
 
     if (error) {
+      console.error("Error deleting item:", error.message);
       const isRlsError = error.code === "42501" || /row-level security|permission denied|not allowed/i.test(error.message || "");
-      alert(isRlsError ? "ნივთის წაშლის უფლება არ გაქვს. შეამოწმე Row Level Security policy." : error.message);
+      alert(isRlsError ? `წაშლის შეცდომა: ${error.message}\nშეამოწმე Row Level Security policy.` : `წაშლის შეცდომა: ${error.message}`);
       return;
     }
 
