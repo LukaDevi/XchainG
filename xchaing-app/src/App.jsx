@@ -475,16 +475,7 @@ export default function App() {
       if (target === "listing") {
         setIsModalOpen(true);
       }
-      else if (target === "matches") {
-        const latestPlan = await getLatestSubscriptionPlan();
-        if (latestPlan !== "pro") {
-          alert("AI სერვისებისა და მეჩინგებისთვის საჭიროა Pro ტარიფი.");
-          setIsPricingOpen(true);
-          return;
-        }
-        await refreshSubscription();
-        setActiveTab(target);
-      }
+      else if (target === "matches") setActiveTab(target);
       else {
         setActiveTab(target);
       }
@@ -499,14 +490,7 @@ export default function App() {
     if (pendingAuthAction === "listing") {
       setIsModalOpen(true);
     } else if (pendingAuthAction === "matches") {
-      const latestPlan = await getLatestSubscriptionPlan();
-      if (latestPlan !== "pro") {
-        alert("AI სერვისებისა და მეჩინგებისთვის საჭიროა Pro ტარიფი.");
-        setIsPricingOpen(true);
-      } else {
-        await refreshSubscription();
-        setActiveTab("matches");
-      }
+      setActiveTab("matches");
     } else if (pendingAuthAction === "swap") {
       setSelectedOfferItemId(profileListings[0]?.id || "");
       setSwapError("");
@@ -650,22 +634,12 @@ export default function App() {
   };
 
   const handleMatchAction = (id, newStatus) => {
-    if (subscriptionPlan !== "pro") {
-      alert("AI სერვისებისა და მეჩინგებისთვის საჭიროა Pro ტარიფი.");
-      setIsPricingOpen(true);
-      return;
-    }
     setMatches(
       matches.map((m) => (m.id === id ? { ...m, status: newStatus } : m)),
     );
   };
 
   const handleCancelSentOffer = (id) => {
-    if (subscriptionPlan !== "pro") {
-      alert("AI სერვისებისა და მეჩინგებისთვის საჭიროა Pro ტარიფი.");
-      setIsPricingOpen(true);
-      return;
-    }
     setSentMatches(sentMatches.filter((match) => match.id !== id));
   };
 
