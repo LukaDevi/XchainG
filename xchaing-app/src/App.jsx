@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import LandingHeader from "./components/LandingHeader";
 import PricingModal from "./components/PricingModal";
+import MockPaymentModal from "./components/MockPaymentModal";
 import Chat, { UserAvatar } from "./components/Chat";
 import { useSubscription } from "./hooks/useSubscription";
 import { supabase, supabaseConfigurationError } from "./lib/supabase";
@@ -57,7 +58,6 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [listingFee, setListingFee] = useState(null);
-  const [isPayingListingFee, setIsPayingListingFee] = useState(false);
   const [isPricingOpen, setIsPricingOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [pendingAuthAction, setPendingAuthAction] = useState(null);
@@ -921,7 +921,6 @@ export default function App() {
   const handleCloseListingModal = () => {
     setIsModalOpen(false);
     setListingFee(null);
-    setIsPayingListingFee(false);
     setCapturedPhoto((previousPhoto) => {
       if (previousPhoto?.previewUrl) URL.revokeObjectURL(previousPhoto.previewUrl);
       return null;
@@ -2361,29 +2360,13 @@ export default function App() {
       )}
 
       {listingFee !== null && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
-          <div className={`w-full max-w-sm rounded-xl border p-5 shadow-2xl ${isDarkMode ? "border-slate-800 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-900"}`}>
-            <h2 className="text-lg font-black">გამოქვეყნების საფასური</h2>
-            <p className="mt-2 text-xs leading-relaxed text-slate-400">
-              ამ განცხადების გამოქვეყნების საფასურია <strong className="text-[#FF5500]">{listingFee.toFixed(2)} ₾</strong>.
-            </p>
-            <div className="mt-5 flex gap-2">
-              <button type="button" onClick={() => setListingFee(null)} className="min-h-11 flex-1 rounded-md border border-slate-700 px-3 text-xs font-bold text-slate-300">გაუქმება</button>
-              <button
-                type="button"
-                disabled={isPayingListingFee}
-                onClick={async () => {
-                  setIsPayingListingFee(true);
-                  await handleAddListing({ preventDefault: () => {} }, true);
-                  setIsPayingListingFee(false);
-                }}
-                className="min-h-11 flex-1 rounded-md bg-[#FF5500] px-3 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isPayingListingFee ? "მუშავდება..." : "გადახდა და გამოქვეყნება"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <MockPaymentModal
+          isOpen
+          amount={listingFee}
+          title="განცხადების გამოქვეყნება"
+          onClose={() => setListingFee(null)}
+          onSuccess={() => handleAddListing({ preventDefault: () => {} }, true)}
+        />
       )}
 
       {/* 4. ADD LISTING MODAL (ნივთის აღწერის ფორმა) */}
