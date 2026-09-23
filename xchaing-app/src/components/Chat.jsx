@@ -1,6 +1,28 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, LoaderCircle, MessageSquare, Send } from "lucide-react";
+import { ArrowLeft, LoaderCircle, MessageSquare, Send, User } from "lucide-react";
 import { supabase, supabaseConfigurationError } from "../lib/supabase";
+
+export function UserAvatar({ src, name, className = "h-10 w-10" }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const label = name?.trim() || "მომხმარებელი";
+
+  if (!src || imageFailed) {
+    return (
+      <div className={`flex shrink-0 items-center justify-center rounded-full bg-[#FF5500]/10 font-bold text-[#FF5500] ${className}`} aria-label={label}>
+        {label !== "მომხმარებელი" ? label.charAt(0).toUpperCase() : <User className="h-1/2 w-1/2" />}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={label}
+      onError={() => setImageFailed(true)}
+      className={`shrink-0 rounded-full object-cover ${className}`}
+    />
+  );
+}
 
 export default function Chat({ swapId, currentUserId, otherUser, onBack, isDarkMode }) {
   const [messages, setMessages] = useState([]);
@@ -107,27 +129,29 @@ export default function Chat({ swapId, currentUserId, otherUser, onBack, isDarkM
     setSending(false);
   };
 
+  const participantName = participant?.full_name
+    || participant?.username
+    || participant?.email
+    || otherUser?.user_metadata?.full_name
+    || otherUser?.user_metadata?.name
+    || otherUser?.email
+    || otherUser?.name
+    || "მომხმარებელი";
+  const participantAvatar = participant?.avatar_url || otherUser?.avatar || otherUser?.user_metadata?.avatar_url;
+
   return (
     <div className={`flex min-h-[calc(100vh-12rem)] flex-col ${isDarkMode ? "bg-slate-950/40" : "bg-slate-50"}`}>
       <header className={`flex items-center gap-3 border-b px-4 py-3 ${isDarkMode ? "border-slate-800" : "border-slate-200"}`}>
         <button type="button" onClick={onBack} className="inline-flex h-10 w-10 items-center justify-center rounded-md text-slate-400 hover:text-white md:hidden" aria-label="ჩატების სიაში დაბრუნება">
           <ArrowLeft className="h-5 w-5" />
         </button>
-        {participant?.avatar_url || otherUser?.avatar ? (
-          <img
-            src={participant?.avatar_url || otherUser.avatar}
-            alt={participant?.full_name || participant?.username || otherUser?.name || "მომხმარებელი"}
-            className="h-10 w-10 rounded-full border-2 border-[#FF5500]/40 object-cover"
-          />
-        ) : (
-          <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#FF5500]/40 bg-[#FF5500]/10 text-[#FF5500]">
-            <MessageSquare className="h-5 w-5" />
-          </div>
-        )}
+        <UserAvatar
+          src={participantAvatar}
+          name={participantName}
+          className="h-10 w-10 border-2 border-[#FF5500]/40"
+        />
         <div className="min-w-0">
-          <h2 className="truncate text-sm font-black">
-            {participant?.full_name || participant?.username || participant?.email || otherUser?.name || "მომხმარებელი"}
-          </h2>
+          <h2 className="truncate text-sm font-black">{participantName}</h2>
           <p className="truncate text-[10px] text-slate-400">გაცვლა: {otherUser?.itemTitle || "მიღებული მოთხოვნა"}</p>
         </div>
       </header>
@@ -143,17 +167,11 @@ export default function Chat({ swapId, currentUserId, otherUser, onBack, isDarkM
         ) : messages.map((message) => (
           <div key={message.id} className={`flex items-end gap-2 ${message.sender_id === currentUserId ? "justify-end" : "justify-start"}`}>
             {message.sender_id !== currentUserId && (
-              participant?.avatar_url || otherUser?.avatar ? (
-                <img
-                  src={participant?.avatar_url || otherUser.avatar}
-                  alt={participant?.full_name || participant?.username || "მომხმარებელი"}
-                  className="h-7 w-7 rounded-full object-cover"
-                />
-              ) : (
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#FF5500]/10 text-[#FF5500]">
-                  <MessageSquare className="h-3.5 w-3.5" />
-                </div>
-              )
+              <UserAvatar
+                src={participantAvatar}
+                name={participantName}
+                className="h-7 w-7 text-[10px]"
+              />
             )}
             <div className={`max-w-[80%] rounded-xl px-3 py-2 text-xs ${message.sender_id === currentUserId ? "rounded-br-none bg-[#FF5500] text-white" : "rounded-bl-none border border-slate-200 bg-white text-slate-800"}`}>
               {message.content}

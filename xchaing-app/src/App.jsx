@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import LandingHeader from "./components/LandingHeader";
 import PricingModal from "./components/PricingModal";
-import Chat from "./components/Chat";
+import Chat, { UserAvatar } from "./components/Chat";
 import { useSubscription } from "./hooks/useSubscription";
 import { supabase, supabaseConfigurationError } from "./lib/supabase";
 import {
@@ -1563,7 +1563,7 @@ export default function App() {
                             onClick={() =>
                               handleOpenChat({
                                 name: item.recipient,
-                                avatar: item.targetProduct.image,
+                                avatar: "",
                                 itemTitle: item.targetProduct.title,
                                 itemImage: item.targetProduct.image,
                               })
@@ -1736,7 +1736,7 @@ export default function App() {
                             handleOpenChat({
                               userId: item.offeredProduct.userId,
                               name: item.offeredProduct.user,
-                              avatar: item.offeredProduct.image,
+                              avatar: "",
                               itemTitle: item.offeredProduct.title,
                               itemImage: item.offeredProduct.image,
                             })
@@ -2055,15 +2055,10 @@ export default function App() {
                         }`}
                       >
                         <div className="relative shrink-0">
-                          <img
+                          <UserAvatar
                             src={conversation.avatar}
-                            alt={conversation.name}
-                            className="w-12 h-12 rounded-full object-cover"
-                          />
-                          <img
-                            src={conversation.itemImage}
-                            alt=""
-                            className="absolute -right-1 -bottom-1 w-5 h-5 rounded-full object-cover border-2 border-slate-900"
+                            name={conversation.name}
+                            className="h-10 w-10"
                           />
                         </div>
                         <div className="min-w-0 flex-1">
@@ -2136,10 +2131,10 @@ export default function App() {
                     >
                       <ArrowLeft className="w-5 h-5" />
                     </button>
-                    <img
+                    <UserAvatar
                       src={selectedChatUser.avatar}
-                      alt={selectedChatUser.name}
-                      className="w-10 h-10 rounded-full object-cover border-2 border-[#FF5500]/40"
+                      name={selectedChatUser.name}
+                      className="h-10 w-10 border-2 border-[#FF5500]/40"
                     />
                     <div className="min-w-0">
                       <h2 className="text-sm font-black truncate">
@@ -2167,10 +2162,10 @@ export default function App() {
                           className={`flex items-end gap-2 ${isSent ? "justify-end" : "justify-start"}`}
                         >
                           {!isSent && (
-                            <img
-                              src={message.avatar || selectedChatUser.avatar || "https://via.placeholder.com/40"}
-                              alt="Avatar"
-                              className="h-8 w-8 rounded-full object-cover"
+                            <UserAvatar
+                              src={message.avatar || selectedChatUser.avatar}
+                              name={selectedChatUser.name}
+                              className="h-8 w-8 text-[10px]"
                             />
                           )}
                           <div
