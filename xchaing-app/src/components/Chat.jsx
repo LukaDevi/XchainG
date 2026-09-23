@@ -39,7 +39,7 @@ export default function Chat({ swapId, currentUserId, otherUser, onBack, isDarkM
     let cancelled = false;
     supabase
       .from("profiles")
-      .select("full_name, username, email, avatar_url")
+      .select("full_name, username, avatar_url")
       .eq("id", otherUser.userId)
       .maybeSingle()
       .then(({ data, error: profileError }) => {
@@ -153,7 +153,6 @@ export default function Chat({ swapId, currentUserId, otherUser, onBack, isDarkM
 
   const participantName = participant?.full_name
     || participant?.username
-    || participant?.email
     || otherUser?.user_metadata?.full_name
     || otherUser?.user_metadata?.name
     || otherUser?.email
