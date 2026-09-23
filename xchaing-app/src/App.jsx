@@ -235,6 +235,7 @@ export default function App() {
       const { data, error } = await supabase
         .from("items")
         .select("*")
+        .eq("status", "active")
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -256,7 +257,7 @@ export default function App() {
     const loadDatabaseState = async () => {
       const [{ data: profile }, { data: allItems }, { data: messages }] = await Promise.all([
         supabase.from("profiles").select("full_name, bio, phone, avatar_url").eq("id", currentUser.id).maybeSingle(),
-        supabase.from("items").select("*").order("created_at", { ascending: false }),
+        supabase.from("items").select("*").eq("status", "active").order("created_at", { ascending: false }),
         supabase.from("messages").select("*").or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`).order("created_at", { ascending: false }),
       ]);
 
@@ -416,22 +417,23 @@ export default function App() {
     };
   }, [isModalOpen]);
   const categories = [
-    { name: lang === "GE" ? "ტექნიკა" : "Electronics", icon: Smartphone },
-    { name: lang === "GE" ? "ტანსაცმელი" : "Clothing", icon: Shirt },
-    { name: lang === "GE" ? "მომსახურება" : "Services", icon: GraduationCap },
-    { name: lang === "GE" ? "ავტო" : "Vehicles", icon: Car },
-    { name: lang === "GE" ? "სახლი & ბაღი" : "Home & Garden", icon: HomeIcon },
-    { name: lang === "GE" ? "სპორტი" : "Sports", icon: Dumbbell },
-    { name: lang === "GE" ? "სხვა" : "Other", icon: Package },
+    { name: "ტექნიკა", icon: Smartphone },
+    { name: "ტანსაცმელი", icon: Shirt },
+    { name: "მომსახურება", icon: GraduationCap },
+    { name: "ავტო", icon: Car },
+    { name: "სახლი & ბაღი", icon: HomeIcon },
+    { name: "სპორტი", icon: Dumbbell },
+    { name: "სხვა", icon: Package },
   ];
 
   const homeCategories = [
-    { id: "phones", label: "ტელეფონები", icon: Smartphone, matches: ["phone", "phones", "ტელეფონი", "ტელეფონები", "mobile"] },
-    { id: "laptops", label: "ლეპტოპები", icon: Package, matches: ["laptop", "laptops", "ლეპტოპი", "ლეპტოპები", "computer"] },
-    { id: "televisions", label: "ტელევიზორები", icon: HomeIcon, matches: ["tv", "television", "televisions", "ტელევიზორი", "ტელევიზორები"] },
-    { id: "accessories", label: "აქსესუარები", icon: Smartphone, matches: ["accessory", "accessories", "აქსესუარი", "აქსესუარები"] },
-    { id: "audio", label: "აუდიო ტექნიკა", icon: MessageSquare, matches: ["audio", "აუდიო", "headphones", "ყურსასმენი"] },
-    { id: "all", label: "ყველა", icon: Package, matches: [] },
+    { id: "electronics", label: "ტექნიკა", icon: Smartphone, matches: ["electronics", "ტექნიკა", "tech"] },
+    { id: "clothing", label: "ტანსაცმელი", icon: Shirt, matches: ["clothing", "ტანსაცმელი"] },
+    { id: "services", label: "მომსახურება", icon: GraduationCap, matches: ["services", "მომსახურება"] },
+    { id: "vehicles", label: "ავტო", icon: Car, matches: ["vehicles", "vehicle", "ავტო", "auto"] },
+    { id: "home", label: "სახლი & ბაღი", icon: HomeIcon, matches: ["home", "garden", "სახლი", "ბაღი"] },
+    { id: "sports", label: "სპორტი", icon: Dumbbell, matches: ["sports", "sport", "სპორტი"] },
+    { id: "other", label: "სხვა", icon: Package, matches: ["other", "სხვა"] },
   ];
 
   const filteredHomepageItems = homepageItems.filter((item) => {
@@ -738,6 +740,7 @@ export default function App() {
 
       setProfileAvatar(avatarUrl);
       setAvatarUploadStatus("Profile photo updated successfully.");
+      setTimeout(() => setAvatarUploadStatus(""), 3000);
       alert("Profile photo updated successfully.");
     } catch (error) {
       const message = error?.message || "Unable to upload avatar.";
@@ -786,6 +789,7 @@ export default function App() {
         bio: sanitizedBio,
       });
       setProfileSaveStatus("Profile saved successfully.");
+      setTimeout(() => setProfileSaveStatus(""), 3000);
       setIsProfileEditorOpen(false);
       alert("Profile updated successfully.");
     } catch (error) {
@@ -854,10 +858,26 @@ export default function App() {
     message.sender_id === currentUser?.id ||
     message.user_id === currentUser?.id;
 
-  const handleMarkListingTraded = (id) => {
+  const handleMarkListingTraded = async (id) => {
+    if (!supabase) {
+      alert(supabaseConfigurationError || "Supabase არ არის კონფიგურირებული.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("items")
+      .update({ status: "traded", updated_at: new Date().toISOString() })
+      .eq("id", id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
     setProfileListings((listings) =>
       listings.filter((listing) => listing.id !== id),
     );
+    setHomepageItems((items) => items.filter((item) => item.id !== id));
   };
 
   const handleDeleteNotification = (id) => {
