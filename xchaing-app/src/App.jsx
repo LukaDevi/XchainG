@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import LandingHeader from "./components/LandingHeader";
+import ListingFilters from "./components/ListingFilters";
 import PricingModal from "./components/PricingModal";
 import MockPaymentModal from "./components/MockPaymentModal";
 import Chat, { UserAvatar } from "./components/Chat";
 import { useSubscription } from "./hooks/useSubscription";
 import { supabase, supabaseConfigurationError } from "./lib/supabase";
+import { CITY_OPTIONS, filterListings } from "./lib/listingFilters";
 import {
-  Menu,
   Sparkles,
   Search,
   SlidersHorizontal,
@@ -21,8 +22,6 @@ import {
   Package,
   Plus,
   ArrowRight,
-  Sun,
-  Moon,
   User,
   ArrowLeftRight,
   ArrowLeft,
@@ -30,7 +29,6 @@ import {
   Clock,
   XCircle,
   Edit3,
-  MapPin,
   Phone,
   Settings,
   Heart,
@@ -69,7 +67,6 @@ export default function App() {
     refreshSubscription,
   } = useSubscription(currentUser?.id);
   const [profileAvatar, setProfileAvatar] = useState("");
-  const [profileUsername, setProfileUsername] = useState("");
   const [profileSaveStatus, setProfileSaveStatus] = useState("");
   const [avatarUploadStatus, setAvatarUploadStatus] = useState("");
   const avatarInputRef = useRef(null);
@@ -83,6 +80,7 @@ export default function App() {
   // Listing Form State
   const [formData, setFormData] = useState({
     title: "",
+    city: "",
     category: "Electronics",
     condition: "used",
     desiredTrade: "",
@@ -117,7 +115,10 @@ export default function App() {
   const [profileForm, setProfileForm] = useState({ full_name: "", phone: "", bio: "" });
   const [profileListings, setProfileListings] = useState([]);
   const [homepageItems, setHomepageItems] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCity, setSelectedCity] = useState("all");
   const [selectedHomeCategory, setSelectedHomeCategory] = useState("all");
+  const [selectedListingType, setSelectedListingType] = useState("all");
   const [profileHistory] = useState([]);
   const [savedListings] = useState([]);
   const [matches, setMatches] = useState([]);
@@ -125,8 +126,6 @@ export default function App() {
   const [isProfileEditorOpen, setIsProfileEditorOpen] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
-  const [isProfileLoading, setIsProfileLoading] = useState(false);
-  const [profileError, setProfileError] = useState("");
   const [swapRequests, setSwapRequests] = useState([]);
   const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
   const [swapTargetItem, setSwapTargetItem] = useState(null);
@@ -160,7 +159,6 @@ export default function App() {
 
       setProfileForm(nextProfile);
       setProfileAvatar(profile?.avatar_url || "");
-      setProfileUsername(user.user_metadata?.username || user.email?.split("@")[0] || "user");
 
       if (!profile) {
         const { error: upsertError } = await supabase.from("profiles").upsert(
@@ -181,8 +179,6 @@ export default function App() {
       console.error("Failed to sync profile:", error);
       setProfileForm({ full_name: fallbackName, phone: "", bio: "" });
       setProfileAvatar("");
-      setProfileUsername(user.email?.split("@")[0] || "user");
-      setProfileError(error?.message || "Unable to load profile.");
     }
   };
 
@@ -203,23 +199,17 @@ export default function App() {
         setCurrentUser(null);
         setProfileForm({ full_name: "", phone: "", bio: "" });
         setProfileAvatar("");
-        setProfileUsername("");
-        setProfileError("");
         setIsModalOpen(false);
         setActiveTab((tab) => (tab === "home" ? tab : "home"));
       }
     };
 
     const initializeUser = async () => {
-      setIsProfileLoading(true);
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError) {
-        setProfileError(userError.message);
-        setIsProfileLoading(false);
         return;
       }
       await applySession(userData?.user ?? null);
-      setIsProfileLoading(false);
     };
 
     initializeUser();
@@ -459,22 +449,28 @@ export default function App() {
   ];
 
   const homeCategories = [
-    { id: "electronics", label: "ტექნიკა", icon: Smartphone, matches: ["electronics", "ტექნიკა", "tech"] },
-    { id: "clothing", label: "ტანსაცმელი", icon: Shirt, matches: ["clothing", "ტანსაცმელი"] },
-    { id: "services", label: "მომსახურება", icon: GraduationCap, matches: ["services", "მომსახურება"] },
-    { id: "vehicles", label: "ავტო", icon: Car, matches: ["vehicles", "vehicle", "ავტო", "auto"] },
-    { id: "home", label: "სახლი & ბაღი", icon: HomeIcon, matches: ["home", "garden", "სახლი", "ბაღი"] },
-    { id: "sports", label: "სპორტი", icon: Dumbbell, matches: ["sports", "sport", "სპორტი"] },
-    { id: "other", label: "სხვა", icon: Package, matches: ["other", "სხვა"] },
+    { id: "electronics", label: "ტექნიკა", labelEn: "Electronics", icon: Smartphone, matches: ["electronics", "ტექნიკა", "tech"] },
+    { id: "clothing", label: "ტანსაცმელი", labelEn: "Clothing", icon: Shirt, matches: ["clothing", "ტანსაცმელი"] },
+    { id: "services", label: "მომსახურება", labelEn: "Services", icon: GraduationCap, matches: ["services", "მომსახურება"] },
+    { id: "vehicles", label: "ავტო", labelEn: "Vehicles", icon: Car, matches: ["vehicles", "vehicle", "ავტო", "auto"] },
+    { id: "home", label: "სახლი & ბაღი", labelEn: "Home & Garden", icon: HomeIcon, matches: ["home", "garden", "სახლი", "ბაღი"] },
+    { id: "sports", label: "სპორტი", labelEn: "Sports", icon: Dumbbell, matches: ["sports", "sport", "სპორტი"] },
+    { id: "other", label: "სხვა", labelEn: "Other", icon: Package, matches: ["other", "სხვა"] },
   ];
 
-  const filteredHomepageItems = homepageItems.filter((item) => {
-    if (selectedHomeCategory === "all") return true;
+  const filteredHomepageItems = filterListings(homepageItems, {
+    search: searchQuery,
+    city: selectedCity,
+    category: selectedHomeCategory,
+    listingType: selectedListingType,
+  }, homeCategories);
 
-    const category = homeCategories.find((entry) => entry.id === selectedHomeCategory);
-    const itemCategory = String(item.category || "").toLowerCase();
-    return category?.matches.some((match) => itemCategory.includes(match));
-  });
+  const clearListingFilters = () => {
+    setSearchQuery("");
+    setSelectedCity("all");
+    setSelectedHomeCategory("all");
+    setSelectedListingType("all");
+  };
 
   // Handlers
   const getLatestSubscriptionPlan = async (userId = currentUser?.id) => {
@@ -934,6 +930,7 @@ export default function App() {
     });
     setFormData({
       title: "",
+      city: "",
       category: "Electronics",
       condition: "used",
       desiredTrade: "",
@@ -944,6 +941,11 @@ export default function App() {
 
   const handleAddListing = async (e, paymentConfirmed = false) => {
     e.preventDefault();
+
+    if (!CITY_OPTIONS.some((option) => option.id === formData.city)) {
+      alert(lang === "GE" ? "აირჩიე ქალაქი განცხადების დასამატებლად." : "Choose a city before adding a listing.");
+      return;
+    }
 
     const latestPlan = await getLatestSubscriptionPlan();
     await refreshSubscription();
@@ -986,6 +988,7 @@ export default function App() {
     const { error: itemError } = await supabase.from("items").insert({
       user_id: currentUser.id,
       title: formData.title,
+      city: formData.city,
       category: formData.category,
       condition: formData.condition,
       desired_trade: formData.desiredTrade,
@@ -1201,7 +1204,10 @@ export default function App() {
                     >
                       <Search className="w-4 h-4 text-[#FF5500] mr-2 shrink-0" />
                       <input
-                        type="text"
+                        type="search"
+                        value={searchQuery}
+                        onChange={(event) => setSearchQuery(event.target.value)}
+                        aria-label={lang === "GE" ? "განცხადებების ძიება" : "Search listings"}
                         onKeyDown={(event) => {
                           if (event.key === "Enter") scrollToSection("categories-section");
                         }}
@@ -1221,6 +1227,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => scrollToSection("categories-section")}
+                      aria-label={lang === "GE" ? "ფილტრებზე გადასვლა" : "Go to filters"}
                       className={`min-h-11 min-w-11 backdrop-blur-md border p-2.5 rounded-md transition flex items-center justify-center ${
                         isDarkMode
                           ? "bg-slate-900/80 border-slate-700/80 text-slate-300 hover:text-[#FF5500]"
@@ -1256,15 +1263,37 @@ export default function App() {
                 <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#FF5500]">XchainG marketplace</p>
-                    <h2 className="mt-1 text-xl font-black tracking-tight sm:text-2xl">ტექნიკა გაცვლისთვის</h2>
+                    <h2 className="mt-1 text-xl font-black tracking-tight sm:text-2xl">{lang === "GE" ? "განცხადებები" : "Listings"}</h2>
                   </div>
-                  <span className="text-xs text-slate-400">{filteredHomepageItems.length} განცხადება</span>
                 </div>
 
+                <ListingFilters
+                  search={searchQuery}
+                  onSearchChange={setSearchQuery}
+                  city={selectedCity}
+                  onCityChange={setSelectedCity}
+                  category={selectedHomeCategory}
+                  onCategoryChange={setSelectedHomeCategory}
+                  listingType={selectedListingType}
+                  onListingTypeChange={setSelectedListingType}
+                  categories={homeCategories}
+                  resultCount={filteredHomepageItems.length}
+                  onClear={clearListingFilters}
+                  lang={lang}
+                  isDarkMode={isDarkMode}
+                />
+
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-[13rem_minmax(0,1fr)] md:items-start">
-                  <nav className={`rounded-lg border p-2 ${isDarkMode ? "border-slate-800 bg-slate-900/60" : "border-slate-200 bg-white"}`} aria-label="ტექნიკის კატეგორიები">
-                    <p className="px-3 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">კატეგორიები</p>
+                  <nav className={`rounded-lg border p-2 ${isDarkMode ? "border-slate-800 bg-slate-900/60" : "border-slate-200 bg-white"}`} aria-label={lang === "GE" ? "კატეგორიები" : "Categories"}>
+                    <p className="px-3 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">{lang === "GE" ? "კატეგორიები" : "Categories"}</p>
                     <div className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedHomeCategory("all")}
+                        className={`flex min-h-10 w-full items-center rounded-r-md border-l-4 px-3 py-2 text-left text-xs font-bold transition ${selectedHomeCategory === "all" ? "border-l-[#FF5500] bg-orange-500/10 text-orange-500" : "border-l-transparent text-slate-400 hover:border-l-orange-500/50 hover:bg-orange-500/5 hover:text-orange-500"}`}
+                      >
+                        {lang === "GE" ? "ყველა კატეგორია" : "All categories"}
+                      </button>
                       {homeCategories.map((category) => {
                         const CategoryIcon = category.icon;
                         const isActive = selectedHomeCategory === category.id;
@@ -1280,7 +1309,7 @@ export default function App() {
                             }`}
                           >
                             <CategoryIcon className="h-4 w-4 shrink-0" />
-                            <span>{category.label}</span>
+                            <span>{lang === "GE" ? category.label : category.labelEn}</span>
                           </button>
                         );
                       })}
@@ -1291,15 +1320,20 @@ export default function App() {
                     {filteredHomepageItems.length === 0 ? (
                   <div className={`flex min-h-64 flex-col items-center justify-center rounded-lg border px-6 py-10 text-center ${isDarkMode ? "border-slate-800 bg-slate-900/50" : "border-slate-200 bg-white"}`}>
                     <Package className="h-9 w-9 text-[#FF5500]" />
-                    <h3 className="mt-4 text-sm font-black">ამ კატეგორიაში ნივთები ჯერ არ არის ატვირთული</h3>
-                    <p className="mt-2 max-w-sm text-xs leading-relaxed text-slate-400">იყავი პირველი და დაამატე ნივთი, რომლის გაცვლაც გსურს.</p>
+                     <h3 className="mt-4 text-sm font-black">{homepageItems.length === 0
+                       ? (lang === "GE" ? "განცხადებები ჯერ არ არის" : "No listings yet")
+                       : (lang === "GE" ? "ამ ფილტრებით განცხადებები ვერ მოიძებნა" : "No listings match these filters")}</h3>
+                     <p className="mt-2 max-w-sm text-xs leading-relaxed text-slate-400">{homepageItems.length === 0
+                       ? (lang === "GE" ? "დაამატე პირველი განცხადება." : "Add the first listing.")
+                       : (lang === "GE" ? "სცადე სხვა საძიებო სიტყვა ან გაასუფთავე ფილტრები." : "Try another search or clear the filters.")}</p>
                     <button
                       type="button"
-                      onClick={() => handleProtectedNavigation("listing")}
+                       onClick={homepageItems.length === 0 ? () => handleProtectedNavigation("listing") : clearListingFilters}
                       className="mt-5 inline-flex min-h-10 items-center gap-2 rounded-md bg-[#FF5500] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#e04b00]"
                     >
-                      <Plus className="h-4 w-4" />
-                      იყავი პირველი — დაამატე შენი ნივთი
+                       {homepageItems.length === 0
+                         ? (lang === "GE" ? "დაამატე განცხადება" : "Add a listing")
+                         : (lang === "GE" ? "ფილტრების გასუფთავება" : "Clear filters")}
                     </button>
                   </div>
                     ) : (
@@ -2552,7 +2586,7 @@ export default function App() {
               </div>
 
               {/* Category & Condition */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
                     კატეგორია
@@ -2597,6 +2631,28 @@ export default function App() {
                     <option value="refurbished">აღდგენილი</option>
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label htmlFor="listing-city" className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  {lang === "GE" ? "ქალაქი *" : "City *"}
+                </label>
+                <select
+                  id="listing-city"
+                  required
+                  value={formData.city}
+                  onChange={(event) => setFormData({ ...formData, city: event.target.value })}
+                  className={`min-h-11 w-full rounded-md border p-2.5 text-xs font-medium outline-none focus:border-[#FF5500] ${
+                    isDarkMode ? "border-slate-800 bg-slate-950 text-white" : "border-slate-300 bg-slate-50 text-slate-900"
+                  }`}
+                >
+                  <option value="" disabled>{lang === "GE" ? "აირჩიე ქალაქი" : "Select a city"}</option>
+                  {CITY_OPTIONS.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {lang === "GE" ? option.labelGe : option.labelEn}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Desired Trade */}

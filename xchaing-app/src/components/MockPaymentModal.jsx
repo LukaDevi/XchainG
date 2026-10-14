@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { CreditCard, LoaderCircle, LockKeyhole, X } from "lucide-react";
 
 export default function MockPaymentModal({
@@ -8,7 +8,14 @@ export default function MockPaymentModal({
   amount = 1,
   title = "გადახდა",
 }) {
+  if (!isOpen) return null;
+
+  return <PaymentContent onClose={onClose} onSuccess={onSuccess} amount={amount} title={title} />;
+}
+
+function PaymentContent({ onClose, onSuccess, amount, title }) {
   const [isProcessing, setIsProcessing] = useState(false);
+  const timeoutRef = useRef(null);
   const [cardForm, setCardForm] = useState({
     number: "4242 •••• •••• 4242",
     expiry: "12/28",
@@ -16,11 +23,12 @@ export default function MockPaymentModal({
     name: "TEST CARDHOLDER",
   });
 
-  useEffect(() => {
-    if (!isOpen) setIsProcessing(false);
-  }, [isOpen]);
-
-  if (!isOpen) return null;
+  useLayoutEffect(() => () => {
+    if (timeoutRef.current !== null) {
+      window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  }, []);
 
   const formattedAmount = Number(amount).toLocaleString("ka-GE", {
     minimumFractionDigits: 0,
@@ -32,10 +40,11 @@ export default function MockPaymentModal({
   };
 
   const handlePayment = () => {
-    if (isProcessing) return;
+    if (isProcessing || timeoutRef.current !== null) return;
 
     setIsProcessing(true);
-    window.setTimeout(() => {
+    timeoutRef.current = window.setTimeout(() => {
+      timeoutRef.current = null;
       setIsProcessing(false);
       onSuccess?.();
     }, 1500);
