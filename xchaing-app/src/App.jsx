@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import LandingHeader from "./components/LandingHeader";
 import ListingFilters from "./components/ListingFilters";
+import AuctionDetails from "./components/AuctionDetails";
 import PricingModal from "./components/PricingModal";
 import MockPaymentModal from "./components/MockPaymentModal";
 import Chat, { UserAvatar } from "./components/Chat";
 import { useSubscription } from "./hooks/useSubscription";
 import { supabase, supabaseConfigurationError } from "./lib/supabase";
 import { CITY_OPTIONS, filterListings } from "./lib/listingFilters";
+import { auctionAmounts, publishListingAttempt, toUtcAuctionDeadline } from "./lib/listingCreation";
+import { readPendingListing } from "./lib/auctionRecovery";
 import {
   Sparkles,
   Search,
@@ -46,7 +49,64 @@ import {
   LoaderCircle,
 } from "lucide-react";
 
+const LISTING_TEXT = {
+  GE: {
+    storageError: "ბრაუზერმა აღდგენის მონაცემები ვერ შეინახა. გაგზავნა შეჩერებულია; დაუშვი ამ საიტისთვის მონაცემების შენახვა და სცადე ხელახლა.",
+    modalTitle: "განცხადების დამატება",
+    listingType: "განცხადების ტიპი",
+    offer: "გაცვლა",
+    auction: "აუქციონი",
+    startingPrice: "საწყისი ფასი (₾) *",
+    minIncrement: "ბიდის მინიმალური ნაბიჯი (₾) *",
+    endsAt: "დასრულების თარიღი და დრო *",
+    localTime: "მიუთითე შენი ადგილობრივი დრო.",
+    titleRequired: "შეიყვანე ნივთის დასახელება.",
+    cityRequired: "აირჩიე ქალაქი განცხადების დასამატებლად.",
+    tradeRequired: "მიუთითე, რაში გსურს გაცვლა.",
+    photoRequired: "განცხადებისთვის გადაიღე ნივთის ფოტო კამერით.",
+    priceInvalid: "ფასი და ბიდის ნაბიჯი უნდა იყოს 0.01–9 999 999 999.99 ₾, მაქსიმუმ ორი ათწილადით.",
+    endInvalid: "აირჩიე მომავალი დასრულების თარიღი და დრო.",
+    authRequired: "განცხადების დასამატებლად ავტორიზაციაა საჭირო.",
+    countFailed: "განცხადებების რაოდენობა ვერ შემოწმდა. სცადე ხელახლა.",
+    uploadError: "ფოტოს ატვირთვა ვერ დადასტურდა. სცადე ხელახლა; იგივე განცხადების ID შენარჩუნებულია.",
+    saveRejected: "განცხადება ვერ გამოქვეყნდა. გადაამოწმე მონაცემები და სცადე ხელახლა.",
+    saveUncertain: "გამოქვეყნების შედეგი ჯერ გაურკვეველია. ფოტო შენარჩუნებულია; ხელახლა დაჭერით იგივე განცხადებას შევამოწმებთ.",
+    accountChanged: "ეს მცდელობა სხვა ანგარიშით დაიწყო. გასაგრძელებლად დაბრუნდი იმ ანგარიშზე.",
+    publishing: "ქვეყნდება...",
+    retry: "იგივე განცხადების შემოწმება",
+    published: "განცხადება წარმატებით გამოქვეყნდა.",
+  },
+  EN: {
+    storageError: "The browser could not save recovery data. Nothing was sent. Allow storage for this site and try again.",
+    modalTitle: "Add a listing",
+    listingType: "Listing type",
+    offer: "Exchange",
+    auction: "Auction",
+    startingPrice: "Starting price (GEL) *",
+    minIncrement: "Minimum bid increment (GEL) *",
+    endsAt: "End date and time *",
+    localTime: "Enter your local date and time.",
+    titleRequired: "Enter an item title.",
+    cityRequired: "Choose a city before adding a listing.",
+    tradeRequired: "Say what you would like in exchange.",
+    photoRequired: "Take a photo of the item before adding the listing.",
+    priceInvalid: "Price and bid increment must be 0.01–9,999,999,999.99 GEL with at most two decimals.",
+    endInvalid: "Choose a future auction end date and time.",
+    authRequired: "Sign in before adding a listing.",
+    countFailed: "Could not check your listing count. Please retry.",
+    uploadError: "Photo upload could not be confirmed. Retry using the same listing ID.",
+    saveRejected: "Could not publish the listing. Check the details and try again.",
+    saveUncertain: "Publication is not yet confirmed. The photo is kept; retry will check the same listing.",
+    accountChanged: "This attempt began with another account. Sign in to that account to continue.",
+    publishing: "Publishing...",
+    retry: "Check this listing again",
+    published: "Listing published successfully.",
+  },
+};
+
 export default function App() {
+  const [restoredListing] = useState(readPendingListing);
+  const [hasListingAttempt, setHasListingAttempt] = useState(Boolean(restoredListing));
   // Navigation & Theme State
   const [activeTab, setActiveTab] = useState("home"); // 'home' | 'matches' | 'chat' | 'profile'
   const [isDarkMode, setIsDarkMode] = useState(true);
@@ -56,6 +116,10 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [listingFee, setListingFee] = useState(null);
+  const [isSubmittingListing, setIsSubmittingListing] = useState(false);
+  const [listingNotice, setListingNotice] = useState(restoredListing ? "saveUncertain" : null);
+  const listingSubmittingRef = useRef(false);
+  const listingAttemptRef = useRef(restoredListing);
   const [isPricingOpen, setIsPricingOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [pendingAuthAction, setPendingAuthAction] = useState(null);
@@ -79,18 +143,24 @@ export default function App() {
 
   // Listing Form State
   const [formData, setFormData] = useState({
-    title: "",
-    city: "",
-    category: "Electronics",
-    condition: "used",
-    desiredTrade: "",
+    title: restoredListing?.title ?? "",
+    city: restoredListing?.city ?? "",
+    category: restoredListing?.category ?? "Electronics",
+    condition: restoredListing?.condition ?? "used",
+    listingType: restoredListing?.listingType ?? "offer",
+    startingPrice: restoredListing?.startingPrice ?? "",
+    minIncrement: restoredListing?.minIncrement ?? "1.00",
+    endsAt: restoredListing?.localEndsAt ?? "",
+    desiredTrade: restoredListing?.desiredTrade ?? "",
     image: null,
-    comment: "",
+    comment: restoredListing?.description ?? "",
   });
+  const listingText = LISTING_TEXT[lang];
+  const listingRetryNeeded = hasListingAttempt;
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const cameraStreamRef = useRef(null);
-  const [capturedPhoto, setCapturedPhoto] = useState(null);
+  const [capturedPhoto, setCapturedPhoto] = useState(restoredListing ? { previewUrl: restoredListing.imageUrl, blob: null } : null);
   const [cameraError, setCameraError] = useState("");
   const [isCameraReady, setIsCameraReady] = useState(false);
 
@@ -115,6 +185,7 @@ export default function App() {
   const [profileForm, setProfileForm] = useState({ full_name: "", phone: "", bio: "" });
   const [profileListings, setProfileListings] = useState([]);
   const [homepageItems, setHomepageItems] = useState([]);
+  const [selectedListing, setSelectedListing] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCity, setSelectedCity] = useState("all");
   const [selectedHomeCategory, setSelectedHomeCategory] = useState("all");
@@ -398,7 +469,7 @@ export default function App() {
   }, [currentUser?.id, selectedChatUser?.userId, selectedChatUser?.swapId]);
 
   useEffect(() => {
-    if (!isModalOpen) return undefined;
+    if (!isModalOpen || hasListingAttempt) return undefined;
 
     let cancelled = false;
     const startCamera = async () => {
@@ -437,7 +508,7 @@ export default function App() {
       cameraStreamRef.current = null;
       setIsCameraReady(false);
     };
-  }, [isModalOpen]);
+  }, [isModalOpen, hasListingAttempt]);
   const categories = [
     { name: "ტექნიკა", icon: Smartphone },
     { name: "ტანსაცმელი", icon: Shirt },
@@ -922,8 +993,11 @@ export default function App() {
   };
 
   const handleCloseListingModal = () => {
+    if (listingSubmittingRef.current) return;
     setIsModalOpen(false);
     setListingFee(null);
+    if (listingAttemptRef.current) return;
+    setListingNotice(null);
     setCapturedPhoto((previousPhoto) => {
       if (previousPhoto?.previewUrl) URL.revokeObjectURL(previousPhoto.previewUrl);
       return null;
@@ -933,6 +1007,10 @@ export default function App() {
       city: "",
       category: "Electronics",
       condition: "used",
+      listingType: "offer",
+      startingPrice: "",
+      minIncrement: "1.00",
+      endsAt: "",
       desiredTrade: "",
       image: null,
       comment: "",
@@ -941,75 +1019,128 @@ export default function App() {
 
   const handleAddListing = async (e, paymentConfirmed = false) => {
     e.preventDefault();
+    if (listingSubmittingRef.current) return;
+    listingSubmittingRef.current = true;
+    setIsSubmittingListing(true);
+    setListingNotice(null);
+    if (paymentConfirmed) setListingFee(null);
 
-    if (!CITY_OPTIONS.some((option) => option.id === formData.city)) {
-      alert(lang === "GE" ? "აირჩიე ქალაქი განცხადების დასამატებლად." : "Choose a city before adding a listing.");
-      return;
+    try {
+      if (!supabase || !currentUser?.id) {
+        setListingNotice("authRequired");
+        return;
+      }
+
+      let attempt = listingAttemptRef.current;
+      if (attempt && attempt.userId !== currentUser.id) {
+        setListingNotice("accountChanged");
+        return;
+      }
+
+      if (!attempt) {
+        if (!formData.title.trim()) {
+          setListingNotice("titleRequired");
+          return;
+        }
+        if (!CITY_OPTIONS.some((option) => option.id === formData.city)) {
+          setListingNotice("cityRequired");
+          return;
+        }
+        if (formData.listingType === "offer" && !formData.desiredTrade.trim()) {
+          setListingNotice("tradeRequired");
+          return;
+        }
+        if (!capturedPhoto?.blob) {
+          setListingNotice("photoRequired");
+          return;
+        }
+
+        let amounts;
+        let endsAt;
+        if (formData.listingType === "auction") {
+          try {
+            amounts = auctionAmounts(formData.startingPrice, formData.minIncrement);
+          } catch {
+            setListingNotice("priceInvalid");
+            return;
+          }
+          try {
+            endsAt = toUtcAuctionDeadline(formData.endsAt);
+          } catch {
+            setListingNotice("endInvalid");
+            return;
+          }
+        }
+
+        const latestPlan = await getLatestSubscriptionPlan();
+        await refreshSubscription();
+        const { count, error } = await supabase
+          .from("items")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", currentUser.id)
+          .eq("status", "active");
+        if (error) {
+          setListingNotice("countFailed");
+          return;
+        }
+        if (!(latestPlan === "pro" && (count || 0) < 10) && !paymentConfirmed) {
+          setListingFee(1);
+          return;
+        }
+
+        const itemId = crypto.randomUUID();
+        attempt = {
+          itemId,
+          userId: currentUser.id,
+          listingType: formData.listingType,
+          title: formData.title.trim(),
+          city: formData.city,
+          category: formData.category,
+          condition: formData.condition,
+          desiredTrade: formData.desiredTrade.trim(),
+          description: formData.comment,
+          startingPrice: amounts?.startingPrice,
+          minIncrement: amounts?.minIncrement,
+          endsAt,
+          localEndsAt: formData.endsAt,
+          photoBlob: capturedPhoto.blob,
+          filePath: `${currentUser.id}/${itemId}.jpg`,
+          uploaded: false,
+          uncertain: false,
+        };
+        listingAttemptRef.current = attempt;
+        setHasListingAttempt(true);
+      }
+
+      const result = await publishListingAttempt(supabase, attempt);
+      if (result.status === "created") {
+        listingAttemptRef.current = null;
+        setHasListingAttempt(false);
+        listingSubmittingRef.current = false;
+        handleCloseListingModal();
+        alert(listingText.published);
+      } else if (result.status === "rejected") {
+        listingAttemptRef.current = null;
+        setHasListingAttempt(false);
+        setListingNotice("saveRejected");
+      } else if (result.status === "storage_error") {
+        setListingNotice("storageError");
+      } else if (result.status === "upload_error") {
+        setListingNotice("uploadError");
+      } else {
+        setListingNotice("saveUncertain");
+      }
+    } catch {
+      if (listingAttemptRef.current) {
+        listingAttemptRef.current.uncertain = true;
+        setListingNotice("saveUncertain");
+      } else {
+        setListingNotice("countFailed");
+      }
+    } finally {
+      listingSubmittingRef.current = false;
+      setIsSubmittingListing(false);
     }
-
-    const latestPlan = await getLatestSubscriptionPlan();
-    await refreshSubscription();
-
-    if (!capturedPhoto?.blob) {
-      alert("განცხადების დასამატებლად გადაიღე ნივთის ფოტო კამერით.");
-      return;
-    }
-
-    const { count: listingCount, error: listingCountError } = await supabase
-      .from("items")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", currentUser.id)
-      .eq("status", "active");
-
-    if (listingCountError) {
-      alert(listingCountError.message);
-      return;
-    }
-
-    const currentListingCount = listingCount || 0;
-    const requiredFee = latestPlan === "pro" && currentListingCount < 10 ? 0 : 1;
-    if (requiredFee > 0 && !paymentConfirmed) {
-      setListingFee(requiredFee);
-      return;
-    }
-
-    if (!supabase || !currentUser?.id) {
-      alert(supabaseConfigurationError || "განცხადების დასამატებლად ავტორიზაციაა საჭირო.");
-      return;
-    }
-
-    const filePath = `${currentUser.id}/${crypto.randomUUID()}.jpg`;
-    const { error: uploadError } = await supabase.storage.from("listings").upload(filePath, capturedPhoto.blob, { contentType: "image/jpeg", upsert: false });
-    if (uploadError) {
-      alert(uploadError.message);
-      return;
-    }
-    const { data: publicUrlData } = supabase.storage.from("listings").getPublicUrl(filePath);
-    const { error: itemError } = await supabase.from("items").insert({
-      user_id: currentUser.id,
-      title: formData.title,
-      city: formData.city,
-      category: formData.category,
-      condition: formData.condition,
-      desired_trade: formData.desiredTrade,
-      description: formData.comment,
-      image_url: publicUrlData.publicUrl,
-      status: "active",
-    });
-    if (itemError) {
-      alert(itemError.message);
-      return;
-    }
-
-    alert(
-      latestPlan === "pro"
-        ? requiredFee === 0
-          ? "განცხადება წარმატებით დაემატა უფასოდ Pro ტარიფით!"
-          : "განცხადება წარმატებით დაემატა AI ფუნქციებით! (საფასური: 1.00 ₾)"
-        : "განცხადება წარმატებით დაემატა! (საფასური: 1.00 ₾)",
-    );
-    setListingFee(null);
-    handleCloseListingModal();
   };
 
   const filteredMatches = matches.filter((m) => {
@@ -1354,17 +1485,24 @@ export default function App() {
                               <h3 className="line-clamp-2 text-sm font-black">{item.title || item.name || "უსათაურო ნივთი"}</h3>
                               <span className="shrink-0 rounded-full bg-[#FF5500]/10 px-2 py-1 text-[10px] font-bold text-[#FF5500]">{item.category || "ტექნიკა"}</span>
                             </div>
-                            <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-400">სასურველი გაცვლა: {item.desired_trade || item.desiredTrade || "შეთავაზება"}</p>
-                            {(item.user_id || item.owner_id) !== currentUser?.id && (
-                              <button
-                                type="button"
-                                onClick={() => openSwapModal(item)}
-                                className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-[#FF5500] px-3 py-2 text-xs font-bold text-white transition hover:bg-[#e04b00]"
-                              >
-                                <ArrowLeftRight className="h-4 w-4" />
-                                გაცვლა
-                              </button>
+                            {item.listing_type === "auction" ? (
+                              <p className="mt-2 text-xs font-semibold text-[#FF5500]">{lang === "GE" ? "აუქციონი" : "Auction"}</p>
+                            ) : (
+                              <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-400">
+                                {lang === "GE" ? "სასურველი გაცვლა:" : "Wanted in exchange:"} {item.desired_trade || item.desiredTrade || (lang === "GE" ? "შეთავაზება" : "Offer")}
+                              </p>
                             )}
+                            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                              <button type="button" onClick={() => setSelectedListing(item)} className={`min-h-10 flex-1 rounded-md border px-3 py-2 text-xs font-bold transition ${isDarkMode ? "border-slate-700 text-slate-100 hover:border-[#FF5500]" : "border-slate-300 text-slate-700 hover:border-[#FF5500]"}`}>
+                                {lang === "GE" ? "დეტალების ნახვა" : "View details"}
+                              </button>
+                              {item.listing_type !== "auction" && (item.user_id || item.owner_id) !== currentUser?.id && (
+                                <button type="button" onClick={() => openSwapModal(item)} className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-md bg-[#FF5500] px-3 py-2 text-xs font-bold text-white transition hover:bg-[#e04b00]">
+                                  <ArrowLeftRight className="h-4 w-4" />
+                                  {lang === "GE" ? "გაცვლა" : "Exchange"}
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </article>
                       );
@@ -2408,6 +2546,55 @@ export default function App() {
         )}
       </main>
 
+      {selectedListing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-2.5 backdrop-blur-sm sm:p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="listing-details-title" className={`max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-xl border shadow-2xl ${isDarkMode ? "border-slate-800 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-900"}`}>
+            <div className={`sticky top-0 z-10 flex items-center justify-between gap-3 border-b px-4 py-3 sm:px-5 ${isDarkMode ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"}`}>
+              <h2 id="listing-details-title" className="min-w-0 truncate text-sm font-black">{lang === "GE" ? "განცხადების დეტალები" : "Listing details"}</h2>
+              <button type="button" onClick={() => setSelectedListing(null)} aria-label={lang === "GE" ? "დახურვა" : "Close"} className="flex min-h-10 min-w-10 items-center justify-center rounded-lg text-slate-400 hover:text-[#FF5500]">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-4 p-4 sm:p-5">
+              {selectedListing.image_url || selectedListing.image ? (
+                <img src={selectedListing.image_url || selectedListing.image} alt={selectedListing.title || selectedListing.name || "Item"} className="aspect-[16/10] w-full rounded-lg object-cover" />
+              ) : (
+                <div className="flex aspect-[16/10] items-center justify-center rounded-lg bg-slate-800/60 text-slate-500"><Package className="h-10 w-10" /></div>
+              )}
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-[#FF5500]">{selectedListing.listing_type === "auction" ? listingText.auction : listingText.offer}</p>
+                <h3 className="mt-1 break-words text-xl font-black">{selectedListing.title || selectedListing.name || (lang === "GE" ? "უსათაურო ნივთი" : "Untitled item")}</h3>
+                <p className="mt-1 text-xs text-slate-400">
+                  {[selectedListing.category, CITY_OPTIONS.find((option) => option.id === String(selectedListing.city || "").toLowerCase())?.[lang === "GE" ? "labelGe" : "labelEn"] || selectedListing.city].filter(Boolean).join(" · ")}
+                </p>
+              </div>
+              {selectedListing.description && <p className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>{selectedListing.description}</p>}
+              {selectedListing.listing_type === "auction" ? (
+                <AuctionDetails
+                  key={`${selectedListing.id}:${currentUser?.id || "anon"}`}
+                  client={supabase}
+                  itemId={selectedListing.id}
+                  ownerId={selectedListing.user_id || selectedListing.owner_id}
+                  currentUserId={currentUser?.id}
+                  lang={lang}
+                  isDarkMode={isDarkMode}
+                  onSignIn={() => setIsAuthModalOpen(true)}
+                />
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-400">{lang === "GE" ? "სასურველი გაცვლა:" : "Wanted in exchange:"} <span className="font-semibold text-[#FF5500]">{selectedListing.desired_trade || selectedListing.desiredTrade || "—"}</span></p>
+                  {(selectedListing.user_id || selectedListing.owner_id) !== currentUser?.id && (
+                    <button type="button" onClick={() => { const item = selectedListing; setSelectedListing(null); openSwapModal(item); }} className="min-h-11 w-full rounded-lg bg-[#FF5500] px-4 py-2 text-xs font-bold text-white hover:bg-[#e04b00]">
+                      {lang === "GE" ? "გაცვლის შეთავაზება" : "Offer an exchange"}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {isSwapModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
           <div className={`w-full max-w-md rounded-xl border p-5 shadow-2xl ${isDarkMode ? "border-slate-800 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-900"}`}>
@@ -2462,7 +2649,7 @@ export default function App() {
         <MockPaymentModal
           isOpen
           amount={listingFee}
-          title="განცხადების გამოქვეყნება"
+          title={listingText.modalTitle}
           onClose={() => setListingFee(null)}
           onSuccess={() => handleAddListing({ preventDefault: () => {} }, true)}
         />
@@ -2488,12 +2675,15 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-[#FF5500]" />
                 <h3 className="font-bold text-sm tracking-tight">
-                  განცხადების დამატება
+                  {listingText.modalTitle}
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={handleCloseListingModal}
-                className="min-h-10 min-w-10 p-1 text-slate-400 hover:text-[#FF5500] flex items-center justify-center"
+                disabled={isSubmittingListing}
+                aria-label={lang === "GE" ? "დახურვა" : "Close"}
+                className="min-h-10 min-w-10 p-1 text-slate-400 hover:text-[#FF5500] flex items-center justify-center disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2503,10 +2693,27 @@ export default function App() {
               onSubmit={handleAddListing}
               className="p-4 sm:p-5 space-y-4 text-left"
             >
+              <fieldset disabled={isSubmittingListing || listingRetryNeeded} className="space-y-4 disabled:opacity-70">
+              <div>
+                <label htmlFor="listing-type" className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  {listingText.listingType}
+                </label>
+                <select
+                  id="listing-type"
+                  value={formData.listingType}
+                  onChange={(event) => setFormData({ ...formData, listingType: event.target.value })}
+                  className={`min-h-11 w-full rounded-md border p-2.5 text-xs font-medium outline-none focus:border-[#FF5500] ${
+                    isDarkMode ? "border-slate-800 bg-slate-950 text-white" : "border-slate-300 bg-slate-50 text-slate-900"
+                  }`}
+                >
+                  <option value="offer">{listingText.offer}</option>
+                  <option value="auction">{listingText.auction}</option>
+                </select>
+              </div>
               {/* Live Camera Capture */}
               <div>
                 <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">
-                  ნივთის ცოცხალი ფოტო
+                  {lang === "GE" ? "ნივთის ცოცხალი ფოტო" : "Live item photo"}
                 </label>
                 <div
                   className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition relative ${
@@ -2520,7 +2727,7 @@ export default function App() {
                     <div className="relative h-40 w-full">
                       <img
                         src={capturedPhoto.previewUrl}
-                        alt="გადაღებული ნივთის ფოტო"
+                        alt={lang === "GE" ? "გადაღებული ნივთის ფოტო" : "Captured item photo"}
                         className="h-full w-full object-cover rounded-md"
                       />
                       <button
@@ -2528,14 +2735,14 @@ export default function App() {
                         onClick={handleRetakePhoto}
                         className="absolute bottom-2 right-2 min-h-10 px-3 rounded-md bg-black/70 text-white text-[10px] font-bold backdrop-blur-sm hover:bg-black/85"
                       >
-                        ხელახლა გადაღება
+                        {lang === "GE" ? "ხელახლა გადაღება" : "Retake photo"}
                       </button>
                       <button
                         type="button"
                         onClick={handleUsePhoto}
                         className="absolute bottom-2 left-2 min-h-10 px-3 rounded-md bg-[#FF5500] text-white text-[10px] font-bold hover:bg-[#e04b00]"
                       >
-                        ფოტოს გამოყენება
+                        {lang === "GE" ? "ფოტოს გამოყენება" : "Use photo"}
                       </button>
                     </div>
                   ) : (
@@ -2553,10 +2760,10 @@ export default function App() {
                         disabled={!isCameraReady}
                         className="min-h-11 w-full sm:w-auto px-5 rounded-md bg-[#FF5500] text-white text-xs font-bold transition hover:bg-[#e04b00] disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        ფოტოს გადაღება
+                        {lang === "GE" ? "ფოტოს გადაღება" : "Take photo"}
                       </button>
                       <p className="text-[10px] text-slate-500">
-                        გამოიყენე კამერა რეალური ნივთის დასაფიქსირებლად
+                        {lang === "GE" ? "გამოიყენე კამერა რეალური ნივთის დასაფიქსირებლად" : "Use the camera to show the actual item"}
                       </p>
                     </div>
                   )}
@@ -2566,17 +2773,18 @@ export default function App() {
 
               {/* Title */}
               <div>
-                <label className="block text-[11px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
-                  ნივთის დასახელება *
+                <label htmlFor="listing-title" className="block text-[11px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
+                  {lang === "GE" ? "ნივთის დასახელება *" : "Item title *"}
                 </label>
                 <input
+                  id="listing-title"
                   type="text"
                   required
                   value={formData.title}
                   onChange={(e) =>
                     setFormData({ ...formData, title: e.target.value })
                   }
-                  placeholder="მაგ: iPhone 13 Pro 128GB"
+                  placeholder={lang === "GE" ? "მაგ: iPhone 13 Pro 128GB" : "Example: iPhone 13 Pro 128GB"}
                   className={`w-full min-h-11 border rounded-md p-2.5 text-xs font-medium focus:border-[#FF5500] focus:outline-none ${
                     isDarkMode
                       ? "bg-slate-950 border-slate-800 text-white"
@@ -2589,7 +2797,7 @@ export default function App() {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
-                    კატეგორია
+                    {lang === "GE" ? "კატეგორია" : "Category"}
                   </label>
                   <select
                     value={formData.category}
@@ -2602,18 +2810,18 @@ export default function App() {
                         : "bg-slate-50 border-slate-300 text-slate-900"
                     }`}
                   >
-                    <option value="Electronics">ტექნიკა</option>
-                    <option value="Clothing">ტანსაცმელი</option>
-                    <option value="Vehicles">ავტო</option>
-                    <option value="Services">მომსახურება</option>
-                    <option value="Sports">სპორტი</option>
-                    <option value="Other">სხვა</option>
+                    <option value="Electronics">{lang === "GE" ? "ტექნიკა" : "Electronics"}</option>
+                    <option value="Clothing">{lang === "GE" ? "ტანსაცმელი" : "Clothing"}</option>
+                    <option value="Vehicles">{lang === "GE" ? "ავტო" : "Vehicles"}</option>
+                    <option value="Services">{lang === "GE" ? "მომსახურება" : "Services"}</option>
+                    <option value="Sports">{lang === "GE" ? "სპორტი" : "Sports"}</option>
+                    <option value="Other">{lang === "GE" ? "სხვა" : "Other"}</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-[11px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
-                    მდგომარეობა
+                    {lang === "GE" ? "მდგომარეობა" : "Condition"}
                   </label>
                   <select
                     value={formData.condition}
@@ -2626,9 +2834,9 @@ export default function App() {
                         : "bg-slate-50 border-slate-300 text-slate-900"
                     }`}
                   >
-                    <option value="used">მეორადი</option>
-                    <option value="new">ახალი</option>
-                    <option value="refurbished">აღდგენილი</option>
+                    <option value="used">{lang === "GE" ? "მეორადი" : "Used"}</option>
+                    <option value="new">{lang === "GE" ? "ახალი" : "New"}</option>
+                    <option value="refurbished">{lang === "GE" ? "აღდგენილი" : "Refurbished"}</option>
                   </select>
                 </div>
               </div>
@@ -2655,10 +2863,65 @@ export default function App() {
                 </select>
               </div>
 
+              {formData.listingType === "auction" && (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="auction-starting-price" className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      {listingText.startingPrice}
+                    </label>
+                    <input
+                      id="auction-starting-price"
+                      type="text"
+                      inputMode="decimal"
+                      required
+                      value={formData.startingPrice}
+                      onChange={(event) => setFormData({ ...formData, startingPrice: event.target.value })}
+                      placeholder="10.00"
+                      className={`min-h-11 w-full rounded-md border p-2.5 text-xs font-medium outline-none focus:border-[#FF5500] ${
+                        isDarkMode ? "border-slate-800 bg-slate-950 text-white" : "border-slate-300 bg-slate-50 text-slate-900"
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="auction-min-increment" className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      {listingText.minIncrement}
+                    </label>
+                    <input
+                      id="auction-min-increment"
+                      type="text"
+                      inputMode="decimal"
+                      required
+                      value={formData.minIncrement}
+                      onChange={(event) => setFormData({ ...formData, minIncrement: event.target.value })}
+                      placeholder="1.00"
+                      className={`min-h-11 w-full rounded-md border p-2.5 text-xs font-medium outline-none focus:border-[#FF5500] ${
+                        isDarkMode ? "border-slate-800 bg-slate-950 text-white" : "border-slate-300 bg-slate-50 text-slate-900"
+                      }`}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label htmlFor="auction-ends-at" className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      {listingText.endsAt}
+                    </label>
+                    <input
+                      id="auction-ends-at"
+                      type="datetime-local"
+                      required
+                      value={formData.endsAt}
+                      onChange={(event) => setFormData({ ...formData, endsAt: event.target.value })}
+                      className={`min-h-11 w-full rounded-md border p-2.5 text-xs font-medium outline-none focus:border-[#FF5500] ${
+                        isDarkMode ? "border-slate-800 bg-slate-950 text-white" : "border-slate-300 bg-slate-50 text-slate-900"
+                      }`}
+                    />
+                    <p className="mt-1 text-[10px] text-slate-400">{listingText.localTime}</p>
+                  </div>
+                </div>
+              )}
+
               {/* Desired Trade */}
-              <div>
+              {formData.listingType === "offer" && <div>
                 <label className="block text-[11px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
-                  რაში გსურს გაცვლა? *
+                  {lang === "GE" ? "რაში გსურს გაცვლა? *" : "What would you like in exchange? *"}
                 </label>
                 <input
                   type="text"
@@ -2667,20 +2930,20 @@ export default function App() {
                   onChange={(e) =>
                     setFormData({ ...formData, desiredTrade: e.target.value })
                   }
-                  placeholder="მაგ: Gaming ლეპტოპში ან PS5-ში"
+                  placeholder={lang === "GE" ? "მაგ: Gaming ლეპტოპში ან PS5-ში" : "Example: a gaming laptop or PS5"}
                   className={`w-full min-h-11 border rounded-md p-2.5 text-xs font-medium focus:border-[#FF5500] focus:outline-none ${
                     isDarkMode
                       ? "bg-slate-950 border-slate-800 text-white"
                       : "bg-slate-50 border-slate-300 text-slate-900"
                   }`}
                 />
-              </div>
+              </div>}
 
               {/* Description / Comment */}
               <div>
                 <div className="mb-1 flex items-center justify-between gap-2">
                   <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                    აღწერა / დეტალები
+                    {lang === "GE" ? "აღწერა / დეტალები" : "Description / details"}
                   </label>
                   {subscriptionPlan === "pro" ? (
                     <button
@@ -2692,7 +2955,7 @@ export default function App() {
                       Generate with AI
                     </button>
                   ) : (
-                    <span className="text-[10px] text-slate-500">AI features available in Pro plan</span>
+                    <span className="text-[10px] text-slate-500">{lang === "GE" ? "AI ფუნქციები ხელმისაწვდომია Pro ტარიფით" : "AI features available in Pro plan"}</span>
                   )}
                 </div>
                 <textarea
@@ -2701,7 +2964,7 @@ export default function App() {
                   onChange={(e) =>
                     setFormData({ ...formData, comment: e.target.value })
                   }
-                  placeholder="აღწერე ნივთის მდგომარეობა, ელემენტის პროცენტი, დეფექტები ასეთის არსებობისას..."
+                  placeholder={lang === "GE" ? "აღწერე ნივთის მდგომარეობა, ელემენტის პროცენტი, დეფექტები ასეთის არსებობისას..." : "Describe the item's condition, battery health, or any defects..."}
                   className={`w-full min-h-11 border rounded-md p-2.5 text-xs font-medium focus:border-[#FF5500] focus:outline-none resize-none ${
                     isDarkMode
                       ? "bg-slate-950 border-slate-800 text-white"
@@ -2709,6 +2972,7 @@ export default function App() {
                   }`}
                 />
               </div>
+              </fieldset>
 
               {/* Listing Fee Badge */}
               <div
@@ -2721,7 +2985,9 @@ export default function App() {
                 <div className="flex items-center gap-2">
                 {subscriptionPlan === "pro" && <Sparkles className="w-4 h-4 text-[#FF5500]" />}
                   <span className="font-medium">
-                    {subscriptionPlan === "pro" ? "გამოქვეყნება + AI შეფასება:" : "განცხადების გამოქვეყნება:"}
+                    {subscriptionPlan === "pro"
+                      ? (lang === "GE" ? "გამოქვეყნება + AI შეფასება:" : "Publish + AI evaluation:")
+                      : (lang === "GE" ? "განცხადების გამოქვეყნება:" : "Publish listing:")}
                   </span>
                 </div>
                 <span className="font-black text-[#FF5500] text-sm">
@@ -2729,12 +2995,27 @@ export default function App() {
                 </span>
               </div>
 
+              {listingNotice && (
+                <p role="alert" className={`rounded-md border px-3 py-2 text-xs leading-relaxed ${
+                  listingNotice === "saveUncertain" || listingNotice === "uploadError"
+                    ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                    : "border-red-500/40 bg-red-500/10 text-red-300"
+                }`}>
+                  {listingText[listingNotice]}
+                </p>
+              )}
+
               <button
                 type="submit"
-                className="w-full min-h-11 bg-[#FF5500] hover:bg-[#e04b00] active:scale-98 text-white font-bold py-3 rounded-lg text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-[#FF5500]/25"
+                disabled={isSubmittingListing}
+                className="w-full min-h-11 bg-[#FF5500] hover:bg-[#e04b00] active:scale-98 text-white font-bold py-3 rounded-lg text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-[#FF5500]/25 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {subscriptionPlan === "pro" && <Sparkles className="w-4 h-4" />}
-                <span>{listingFeePreview === 0 ? "გამოქვეყნება უფასოდ" : "განცხადების გამოქვეყნება (1.00 ₾)"}</span>
+                {isSubmittingListing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : subscriptionPlan === "pro" && <Sparkles className="w-4 h-4" />}
+                <span>{isSubmittingListing ? listingText.publishing
+                  : listingRetryNeeded ? listingText.retry
+                    : listingFeePreview === 0
+                      ? (lang === "GE" ? "გამოქვეყნება უფასოდ" : "Publish for free")
+                      : (lang === "GE" ? "განცხადების გამოქვეყნება (1.00 ₾)" : "Publish listing (1.00 GEL)")}</span>
               </button>
             </form>
           </div>
